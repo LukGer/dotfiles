@@ -1,11 +1,13 @@
-# dotfiles
+# LukGer dotfiles
 
-macOS config for zsh, git, Homebrew, Ghostty, Cursor and Claude Code.
+Your dotfiles are how you personalize your system. These are mine — macOS
+config for zsh, git, Homebrew, Ghostty, Cursor and Claude Code.
 
-Structure and install mechanism are lifted from
-[holman/dotfiles](https://github.com/holman/dotfiles), by way of
-[haacked/dotfiles](https://github.com/haacked/dotfiles) and
-[pauldambra/dotfiles](https://github.com/pauldambra/dotfiles).
+They're so personal I copied much of them from
+[pauldambra/dotfiles](https://github.com/pauldambra/dotfiles), who copied much
+of them from [haacked/dotfiles](https://github.com/haacked/dotfiles), who
+copied much of them from [holman/dotfiles](https://github.com/holman/dotfiles)
+— including the approach to install them.
 
 ## Install
 
