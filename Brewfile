@@ -15,64 +15,72 @@ cask_args appdir: "/Applications"
 tap "tw93/tap", trusted: true
 tap "withgraphite/tap"
 
-# --- CLI ---
-# Automate deployment, configuration, and upgrading
-brew "ansible"
-# Clone of cat(1) with syntax highlighting and Git integration
+# --- Shell utilities (zsh/aliases.zsh and zsh/tools.zsh depend on these) ---
 brew "bat"
-# Toolchain of the web
-brew "biome"
-# Dependency manager for Cocoa projects
-brew "cocoapods"
-# Perl lib for reading and writing EXIF metadata
-brew "exiftool"
-# Like neofetch, but much faster because written mostly in C
 brew "fastfetch"
-# Easiest way to build and release mobile apps
-brew "fastlane"
-# Play, record, convert, and stream select audio and video codecs
-brew "ffmpeg"
-# Command-line fuzzy finder written in Go
 brew "fzf"
-# GitHub command-line tool
-brew "gh"
-# GNU Privacy Guard (OpenPGP)
-brew "gnupg"
-# Clone of ls with colorful output, file type icons, and more
 brew "lsd"
-# Deep clean and optimize your Mac
 brew "mole"
-# MongoDB Shell to connect, configure, query, and work with your MongoDB database
-brew "mongosh"
-# HTTP(S) server and reverse proxy, and IMAP/POP3 proxy server
-brew "nginx"
-# Search tool like grep and The Silver Searcher
 brew "ripgrep"
-# Powerful, clean, object-oriented scripting language
-brew "ruby@3.1"
-# Watch files and take action when they change
+
+# --- Git and GitHub ---
+brew "gh"
+
+# --- Web development ---
+brew "biome"
+
+# --- Mobile development (Expo / React Native) ---
+brew "cocoapods"
+brew "fastlane"
 brew "watchman"
 
-# --- Casks ---
-# Everything below was originally installed by hand; listing it here is what
-# makes a rebuild one command.
-cask "1password"
-cask "bitwarden"
+# --- Media ---
+brew "exiftool"
+brew "ffmpeg"
+
+# --- Infrastructure and databases ---
+brew "ansible"
+brew "mongosh"
+brew "nginx"
+
+# --- Languages and crypto ---
+# Ruby is here for cocoapods/fastlane, which need a newer interpreter than the
+# macOS system 2.6.
+brew "gnupg"
+brew "ruby@3.1"
+
+# --- Editors and terminals ---
+cask "cursor"
+cask "ghostty"
+
+# --- AI tooling ---
 cask "claude"
 cask "conductor"
-cask "cursor"
+
+# --- Development ---
 cask "docker-desktop"
-cask "figma"
 cask "fork"
-cask "ghostty"
-cask "google-chrome"
-cask "mactex"
 cask "mongodb-compass"
 cask "ngrok"
-cask "raycast"
+
+# --- Design ---
+cask "figma"
+
+# --- Password managers ---
+cask "1password"
+cask "bitwarden"
+
+# --- Communication ---
 cask "slack"
-cask "spotify"
-cask "steam"
+cask "whatsapp"
+
+# --- Networking ---
 cask "surfshark"
 cask "tailscale-app"
-cask "whatsapp"
+
+# --- Everything else ---
+cask "google-chrome"
+cask "mactex"
+cask "raycast"
+cask "spotify"
+cask "steam"
