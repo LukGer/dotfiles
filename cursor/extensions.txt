@@ -1,0 +1,17 @@
+anthropic.claude-code
+anysphere.remote-containers
+anysphere.remote-ssh
+astro-build.astro-vscode
+bradlc.vscode-tailwindcss
+dbaeumer.vscode-eslint
+esbenp.prettier-vscode
+expo.vscode-expo-tools
+github.github-vscode-theme
+jellydn.toggle-excluded-files
+kamikillerto.vscode-colorize
+openai.chatgpt
+oven.bun-vscode
+oxc.oxc-vscode
+pkief.material-icon-theme
+redhat.vscode-yaml
+slevesque.shader

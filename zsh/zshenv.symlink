@@ -1,0 +1,7 @@
+# .zshenv is sourced by every zsh invocation, including non-interactive ones
+# (scripts, `ssh host cmd`, editor tasks). It holds the minimum needed for a
+# non-interactive shell to find the node toolchain.
+#
+# Full PATH construction happens in zsh/path.zsh, sourced from .zshrc.
+export VOLTA_HOME="$HOME/.volta"
+export PATH="$VOLTA_HOME/bin:$PATH"

@@ -1,0 +1,23 @@
+#!/bin/sh
+#
+# Delete a branch locally and on origin.
+#
+#   git nuke some-dead-branch
+#
+# CREDIT: https://github.com/holman/dotfiles/blob/master/bin/git-nuke
+
+set -e
+
+if [ -z "$1" ]; then
+  echo "usage: git nuke <branch>" >&2
+  exit 1
+fi
+
+default=$(git default)
+if [ "$1" = "$default" ]; then
+  echo "refusing to nuke the default branch ($default)" >&2
+  exit 1
+fi
+
+git branch -D "$1"
+git push origin --delete "$1"

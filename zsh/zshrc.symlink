@@ -1,0 +1,50 @@
+# Powerlevel10k instant prompt. Must stay at the very top: anything that writes
+# to the console or reads input has to run above it.
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
+
+export DOTFILES="$HOME/.dotfiles"
+
+# --- zinit ---
+ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
+
+if [[ ! -d $ZINIT_HOME ]]; then
+  mkdir -p "$(dirname $ZINIT_HOME)"
+  git clone https://github.com/zdharma-continuum/zinit.git "$ZINIT_HOME"
+fi
+
+source "${ZINIT_HOME}/zinit.zsh"
+
+# compinit is cached and only rebuilt once a day.
+autoload -Uz compinit
+if [[ -f ~/.zcompdump && $(date +'%j') == $(stat -f '%Sm' -t '%j' ~/.zcompdump 2>/dev/null) ]]; then
+  compinit -C
+else
+  compinit
+fi
+
+# Theme. Installed via zinit, not brew — keep it that way, two copies fight.
+zinit ice depth=1; zinit light romkatv/powerlevel10k
+
+# Plugins, turbo-loaded (deferred until after first prompt).
+zinit ice wait lucid; zinit light zsh-users/zsh-syntax-highlighting
+zinit ice wait lucid; zinit light zsh-users/zsh-completions
+zinit ice wait lucid; zinit light zsh-users/zsh-autosuggestions
+zinit ice wait lucid; zinit light Aloxaf/fzf-tab
+
+# --- topic files ---
+# Sourced explicitly and in order rather than by glob: path must win before
+# anything else looks up a binary, and tools.zsh shells out to several.
+for _dotfile in path config aliases functions tools; do
+  [[ -r "$DOTFILES/zsh/$_dotfile.zsh" ]] && source "$DOTFILES/zsh/$_dotfile.zsh"
+done
+unset _dotfile
+
+# --- prompt ---
+# To customize, run `p10k configure` or edit ~/.p10k.zsh.
+[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+
+# --- machine-local overrides ---
+# Anything secret or specific to this one machine goes here. Never committed.
+[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local

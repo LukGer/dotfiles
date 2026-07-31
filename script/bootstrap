@@ -1,0 +1,226 @@
+#!/usr/bin/env bash
+#
+# bootstrap installs things.
+#
+# Adapted from https://github.com/holman/dotfiles/blob/master/script/bootstrap
+# with two additions: a config/ tree that mirrors ~/.config (holman's
+# *.symlink convention can only produce ~/.foo, and most of the config worth
+# tracking here lives under ~/.config), and a templated ~/.npmrc.
+
+cd "$(dirname "$0")/.."
+DOTFILES_ROOT=$(pwd -P)
+
+set -e
+
+echo ''
+
+info () {
+  printf "\r  [ \033[00;34m..\033[0m ] %s\n" "$1"
+}
+
+user () {
+  printf "\r  [ \033[0;33m??\033[0m ] %s\n" "$1"
+}
+
+success () {
+  printf "\r\033[2K  [ \033[00;32mOK\033[0m ] %s\n" "$1"
+}
+
+fail () {
+  printf "\r\033[2K  [\033[0;31mFAIL\033[0m] %s\n" "$1"
+  echo ''
+  exit 1
+}
+
+# Identity and machine-specific git config live in ~/.gitconfig.local, which is
+# gitignored. Values are pre-filled from whatever git already knows so a re-run
+# on a configured machine is non-interactive.
+setup_gitconfig () {
+  if ! [ -f git/gitconfig.local.symlink ]
+  then
+    info 'setup gitconfig'
+
+    git_credential='cache'
+    if [ "$(uname -s)" == "Darwin" ]
+    then
+      git_credential='osxkeychain'
+    fi
+
+    git_authorname=$(git config --global --get user.name 2>/dev/null || echo "")
+    git_authoremail=$(git config --global --get user.email 2>/dev/null || echo "")
+    git_signingkey=$(git config --global --get user.signingKey 2>/dev/null || echo "")
+
+    if [ -z "$git_authorname" ]; then
+      user ' - What is your github author name?'
+      read -e git_authorname
+    else
+      info "using existing git author name: $git_authorname"
+    fi
+
+    if [ -z "$git_authoremail" ]; then
+      user ' - What is your github author email?'
+      read -e git_authoremail
+    else
+      info "using existing git author email: $git_authoremail"
+    fi
+
+    if [ -z "$git_signingkey" ]; then
+      user ' - Path to your SSH signing key .pub (empty to disable commit signing)'
+      read -e git_signingkey
+    else
+      info "using existing git signing key: $git_signingkey"
+    fi
+
+    if [ -z "$git_signingkey" ]; then
+      # No key: drop the signing lines entirely and turn gpgsign off, otherwise
+      # every `git commit` on this machine would fail.
+      sed -e "s|AUTHORNAME|$git_authorname|g" \
+          -e "s|AUTHOREMAIL|$git_authoremail|g" \
+          -e "s|GIT_CREDENTIAL_HELPER|$git_credential|g" \
+          -e "/SIGNINGKEY/d" \
+          -e "s|gpgsign = true|gpgsign = false|" \
+          git/gitconfig.local.symlink.template > git/gitconfig.local.symlink
+    else
+      sed -e "s|AUTHORNAME|$git_authorname|g" \
+          -e "s|AUTHOREMAIL|$git_authoremail|g" \
+          -e "s|GIT_CREDENTIAL_HELPER|$git_credential|g" \
+          -e "s|SIGNINGKEY|$git_signingkey|g" \
+          git/gitconfig.local.symlink.template > git/gitconfig.local.symlink
+    fi
+
+    success 'gitconfig'
+  fi
+}
+
+# ~/.npmrc carries a private-registry auth token, so the real file is
+# gitignored and generated from a committed template. An existing ~/.npmrc is
+# reused verbatim so bootstrap never destroys a working token.
+setup_npmrc () {
+  if ! [ -f npm/npmrc.symlink ]
+  then
+    info 'setup npmrc'
+
+    if [ -f "$HOME/.npmrc" ] && [ ! -L "$HOME/.npmrc" ]
+    then
+      cp "$HOME/.npmrc" npm/npmrc.symlink
+      success 'npmrc (preserved existing tokens)'
+    else
+      cp npm/npmrc.symlink.template npm/npmrc.symlink
+      success 'npmrc (from template — fill in your tokens)'
+    fi
+  fi
+}
+
+link_file () {
+  local src=$1 dst=$2
+
+  local overwrite= backup= skip=
+  local action=
+
+  if [ -f "$dst" -o -d "$dst" -o -L "$dst" ]
+  then
+
+    # An already-correct symlink is always a no-op. This check deliberately
+    # sits OUTSIDE the *_all branch below: holman's original nests it inside,
+    # so once you answer [B]ackup all, every subsequent run backs up links that
+    # were already correct — clobbering the real-file backups the first run
+    # made, with symlinks.
+    if [ "$(readlink "$dst")" == "$src" ]
+    then
+      skip=true
+    elif [ "$overwrite_all" == "false" ] && [ "$backup_all" == "false" ] && [ "$skip_all" == "false" ]
+    then
+
+      user "File already exists: $dst ($(basename "$src")), what do you want to do?\n\
+      [s]kip, [S]kip all, [o]verwrite, [O]verwrite all, [b]ackup, [B]ackup all?"
+      read -n 1 action
+      echo ''
+
+      case "$action" in
+        o )
+          overwrite=true;;
+        O )
+          overwrite_all=true;;
+        b )
+          backup=true;;
+        B )
+          backup_all=true;;
+        s )
+          skip=true;;
+        S )
+          skip_all=true;;
+        * )
+          ;;
+      esac
+
+    fi
+
+    overwrite=${overwrite:-$overwrite_all}
+    backup=${backup:-$backup_all}
+    skip=${skip:-$skip_all}
+
+    if [ "$overwrite" == "true" ]
+    then
+      rm -rf "$dst"
+      success "removed $dst"
+    fi
+
+    if [ "$backup" == "true" ]
+    then
+      mv "$dst" "${dst}.backup"
+      success "moved $dst to ${dst}.backup"
+    fi
+
+    if [ "$skip" == "true" ]
+    then
+      success "skipped $src"
+    fi
+  fi
+
+  if [ "$skip" != "true" ]  # "false" or empty
+  then
+    mkdir -p "$(dirname "$dst")"
+    ln -s "$1" "$2"
+    success "linked $1 to $2"
+  fi
+}
+
+install_dotfiles () {
+  info 'installing dotfiles'
+
+  local overwrite_all=false backup_all=false skip_all=false
+
+  # topic/foo.symlink -> ~/.foo
+  for src in $(find -H "$DOTFILES_ROOT" -maxdepth 2 -name '*.symlink' -not -path '*.git*')
+  do
+    dst="$HOME/.$(basename "${src%.*}")"
+    link_file "$src" "$dst"
+  done
+
+  # config/<path> -> ~/.config/<path>, preserving the tree beneath config/.
+  # -print0 because at least one of these paths may contain spaces later.
+  if [ -d "$DOTFILES_ROOT/config" ]
+  then
+    while IFS= read -r -d '' src
+    do
+      rel="${src#$DOTFILES_ROOT/config/}"
+      link_file "$src" "$HOME/.config/$rel"
+    done < <(find -H "$DOTFILES_ROOT/config" -type f -not -name '.DS_Store' -print0)
+  fi
+}
+
+setup_gitconfig
+setup_npmrc
+install_dotfiles
+
+info 'running installers'
+"$DOTFILES_ROOT/script/install" || fail 'installer failed'
+
+echo ''
+echo '  All installed!'
+echo ''
+echo '  Open a new terminal, or run: source ~/.zshrc'
+echo ''
+echo '  macOS defaults are NOT applied automatically. Read macos/set-defaults.sh'
+echo '  first, then run it yourself when you are happy with it.'
+echo ''

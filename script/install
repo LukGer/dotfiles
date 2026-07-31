@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#
+# Run all dotfiles installers.
+
+set -e
+
+cd "$(dirname "$0")"/..
+
+# On a machine where the apps were originally installed by hand, `brew bundle`
+# will try to install casks over the top of them. Set SKIP_BREW_BUNDLE=1 to
+# link everything else first and adopt Homebrew management deliberately later.
+if [ -f Brewfile ] && command -v brew >/dev/null 2>&1 && [ -z "$SKIP_BREW_BUNDLE" ]
+then
+  echo "› brew bundle"
+  brew bundle --file=Brewfile
+else
+  echo "› skipping brew bundle (SKIP_BREW_BUNDLE set, or brew missing)"
+fi
+
+# Find the per-topic installers and run them iteratively.
+#
+# -mindepth 2 keeps this from re-running a repo-root install script (there
+# isn't one today, but adding one later shouldn't cause recursion).
+# -print0 / read -d '' handle paths containing spaces.
+find . -mindepth 2 -name install.sh -print0 | while IFS= read -r -d '' installer
+do
+  echo "› $installer"
+  sh "$installer"
+done

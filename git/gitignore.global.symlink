@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Editors
+*.swp
+*.swo
+*~
+.idea/
+*.sublime-workspace
+
+# Agent / tooling scratch
+.claude/worktrees/
+**/.claude/settings.local.json
+.notes/

@@ -1,0 +1,8 @@
+# Login shells only. Homebrew's shellenv sets PATH, MANPATH, INFOPATH and a
+# few HOMEBREW_* variables; zsh/path.zsh reorders PATH afterwards so Volta
+# still beats /opt/homebrew/bin for node.
+#
+# The Volta export that used to be duplicated here (and in ~/.profile) now
+# lives solely in .zshenv. Note that Volta's own installer re-adds it on
+# upgrade — if it reappears, delete it again.
+eval "$(/opt/homebrew/bin/brew shellenv)"

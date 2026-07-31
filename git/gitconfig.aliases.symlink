@@ -1,0 +1,56 @@
+# Git aliases, included from ~/.gitconfig.
+#
+# Curated from https://github.com/haacked/dotfiles/blob/main/git/gitconfig.aliases.symlink
+# and https://github.com/holman/dotfiles/blob/master/git/aliases.zsh. Aliases
+# that depended on their private helper scripts or PostHog workflow were
+# dropped; `default` below is a self-contained rewrite of haacked's, which
+# shelled out to bin/lib/git-default-branch.sh.
+[alias]
+	# --- everyday ---
+	st = status -s
+	co = switch
+	cob = switch -c
+	cm = !git add -A && git commit -m
+	amend = commit -a --amend
+	wip = commit -am "WIP"
+	save = !git add -A && git commit -m 'SAVEPOINT'
+
+	# --- undo ---
+	# Undo the last commit, keeping its changes in the working tree.
+	undo = reset HEAD~1 --mixed
+	unstage = reset -q HEAD --
+	discard = checkout --
+	abort = rebase --abort
+
+	# --- syncing ---
+	up = !git pull --rebase --prune && git submodule update --init --recursive
+	sync = !git pull --rebase && git push
+	# Force push the current branch only, and refuse if it would drop commits
+	# you haven't seen. Never use plain --force.
+	pushf = push --force-with-lease --force-if-includes
+
+	# --- inspection ---
+	branches = branch -a
+	stashes = stash list
+	remotes = remote -v
+	aliases = "!git config -l | grep ^alias\\. | cut -c 7-"
+	conflicts = !git diff --name-only --diff-filter=U
+	ls = log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate
+	hist = log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(bold yellow)%d%C(reset)' --all
+	# Files with the most churn.
+	churn = !git --no-pager log --name-only --oneline | grep -v ' ' | sort | uniq -c | sort -nr | head
+
+	# --- branch-relative ---
+	# Resolve the default branch: origin/HEAD if set, else main, else master.
+	default = "!f() { d=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null); if [ -n \"$d\" ]; then echo \"${d#origin/}\"; elif git show-ref --verify --quiet refs/heads/main; then echo main; else echo master; fi; }; f"
+	# One-line log of just this branch's commits.
+	branchlog = "!f() { git --no-pager log --oneline \"$(git default)\"..HEAD; }; f"
+	# Every file this branch touches, committed or not — useful for scoping
+	# linters and test runs to what you actually changed.
+	bchanges = "!f() { (git diff --name-only \"$(git default)\"...HEAD; git status --porcelain | cut -c4-) | sort -u; }; f"
+	# Delete local branches whose upstream is gone (i.e. merged and cleaned up).
+	gone = "!git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads/ | awk '$2 == \"[gone]\" { print $1 }'"
+
+	# --- github ---
+	open = "!f() { URL=$(git config remote.origin.url); open \"${URL%.git}\"; }; f"
+	pr = "!GH_PAGER= gh pr view --json url -q .url 2>/dev/null"

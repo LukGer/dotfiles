@@ -1,0 +1,9 @@
+# Machine-local / secret-bearing files generated from committed templates.
+# See README "Secrets" — these must never be committed.
+git/gitconfig.local.symlink
+npm/npmrc.symlink
+
+.DS_Store
+*.swp
+*.local
+**/.claude/settings.local.json

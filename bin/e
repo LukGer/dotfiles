@@ -1,0 +1,10 @@
+#!/bin/sh
+#
+# Quick shortcut to the editor.
+#
+#   $ e            # opens the current directory
+#   $ e ~/dev/foo  # opens that directory
+#
+# CREDIT: https://github.com/holman/dotfiles/blob/master/bin/e
+
+exec "${EDITOR:-cursor}" "${1:-.}"

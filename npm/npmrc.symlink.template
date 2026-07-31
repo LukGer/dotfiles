@@ -1,0 +1,6 @@
+# Template for ~/.npmrc. script/bootstrap copies this to npm/npmrc.symlink
+# (gitignored) and links that to ~/.npmrc. If a real ~/.npmrc already exists,
+# bootstrap preserves it verbatim instead — your existing tokens survive.
+#
+# Replace the placeholder with the real token from your Mobiscroll account.
+//npm.mobiscroll.com/:_authToken=${MOBISCROLL_TOKEN}

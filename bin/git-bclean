@@ -1,0 +1,34 @@
+#!/bin/sh
+#
+# Delete local branches whose upstream is gone — i.e. branches that were
+# merged and had their remote deleted by GitHub.
+#
+#   git bclean            # show what would be deleted
+#   git bclean --force    # actually delete
+#
+# Named bclean rather than bclean-local (haacked's name) because this repo
+# doesn't carry his worktree-aware variant.
+#
+# CREDIT: https://github.com/haacked/dotfiles/blob/main/bin/git-bclean-local
+
+set -e
+
+git fetch --prune --quiet
+
+branches=$(git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads/ \
+  | awk '$2 == "[gone]" { print $1 }')
+
+if [ -z "$branches" ]; then
+  echo "nothing to clean"
+  exit 0
+fi
+
+if [ "$1" = "--force" ] || [ "$1" = "-f" ]; then
+  echo "$branches" | while read -r branch; do
+    [ -z "$branch" ] && continue
+    git branch -D "$branch"
+  done
+else
+  echo "would delete (re-run with --force):"
+  echo "$branches" | sed 's/^/  /'
+fi

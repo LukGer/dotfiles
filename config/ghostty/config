@@ -1,0 +1,32 @@
+# Ghostty configuration.
+#
+# Ghostty on macOS reads BOTH ~/.config/ghostty/config and
+# ~/Library/Application Support/com.mitchellh.ghostty/config, and *merges*
+# them — which produced duplicate font-family entries when this file was first
+# added alongside the Application Support copy. This is now the only one; the
+# original was moved to config.backup next to it.
+#
+# Note: if you ever change a setting through the Ghostty GUI it writes to the
+# Application Support path, which would start the double-loading again.
+
+theme = Catppuccin Mocha
+font-family = CaskaydiaCove Nerd Font
+
+macos-titlebar-style = tabs
+macos-icon = glass
+macos-titlebar-proxy-icon = hidden
+
+split-divider-color = #222
+unfocused-split-opacity = 1
+confirm-close-surface = false
+background-opacity = 0.95
+
+mouse-hide-while-typing = true
+mouse-scroll-multiplier = 2
+
+window-padding-balance = true
+window-save-state = always
+window-colorspace = "display-p3"
+
+shell-integration-features = sudo
+bell-features = "system"

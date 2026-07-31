@@ -1,0 +1,10 @@
+{
+  "model": "opus[1m]",
+  "enabledPlugins": {
+    "claude-code-setup@claude-plugins-official": true
+  },
+  "effortLevel": "high",
+  "tui": "default",
+  "skipDangerousModePermissionPrompt": true,
+  "skipWorkflowUsageWarning": true
+}

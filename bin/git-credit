@@ -1,0 +1,16 @@
+#!/bin/sh
+#
+# Add a co-author to the last commit.
+#
+#   git credit "Ada Lovelace" ada@example.com
+#
+# CREDIT: https://github.com/holman/dotfiles/blob/master/bin/git-credit
+
+set -e
+
+if [ -z "$2" ]; then
+  echo "usage: git credit <name> <email>" >&2
+  exit 1
+fi
+
+git commit --amend --no-edit --trailer "Co-authored-by: $1 <$2>"
