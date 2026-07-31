@@ -14,13 +14,6 @@ then
   exit 0
 fi
 
-# Disable press-and-hold for keys in favour of key repeat.
-defaults write -g ApplePressAndHoldEnabled -bool false
-
-# Fast key repeat.
-defaults write NSGlobalDomain KeyRepeat -int 1
-defaults write NSGlobalDomain InitialKeyRepeat -int 15
-
 # Use AirDrop over every interface.
 defaults write com.apple.NetworkBrowser BrowseAllInterfaces -bool true
 
