@@ -48,7 +48,7 @@ Run `dot` any time to pull, update Homebrew and re-run the installers.
 | `homebrew/` | installs Homebrew itself; packages come from `Brewfile` |
 | `macos/` | `defaults write` settings, run manually |
 | `cursor/` | settings, keybindings, and the 17-extension list |
-| `ai/` | global `CLAUDE.md`, Claude Code settings, skill lock file |
+| `ai/` | global `AGENTS.md` (shared) + `CLAUDE.md` import, Claude Code settings, skill lock file |
 | `config/` | Ghostty, lsd, gh, Graphite |
 | `npm/` | `~/.npmrc` template (private registry token) |
 | `bin/` | `dot`, `e`, and a few git helpers; added to `PATH` |

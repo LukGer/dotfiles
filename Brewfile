@@ -13,7 +13,6 @@
 cask_args appdir: "/Applications"
 
 tap "tw93/tap", trusted: true
-tap "withgraphite/tap"
 
 # --- Shell utilities (zsh/aliases.zsh and zsh/tools.zsh depend on these) ---
 brew "bat"
@@ -25,9 +24,6 @@ brew "ripgrep"
 
 # --- Git and GitHub ---
 brew "gh"
-
-# --- Web development ---
-brew "biome"
 
 # --- Mobile development (Expo / React Native) ---
 brew "cocoapods"
@@ -54,6 +50,9 @@ cask "cursor"
 cask "ghostty"
 
 # --- AI tooling ---
+# agent-browser CLI (skill lives in ai/skill-lock.json; Chromium via
+# `agent-browser install` in ai/install.sh).
+brew "agent-browser"
 cask "claude"
 cask "conductor"
 
@@ -75,12 +74,10 @@ cask "slack"
 cask "whatsapp"
 
 # --- Networking ---
-cask "surfshark"
 cask "tailscale-app"
 
 # --- Everything else ---
 cask "google-chrome"
-cask "mactex"
 cask "raycast"
 cask "spotify"
 cask "steam"

@@ -2,7 +2,9 @@
 #
 # Claude Code configuration.
 #
-# Links the global CLAUDE.md and settings.json, then restores skills.
+# Links the global AGENTS.md / CLAUDE.md and settings.json, then restores
+# skills. AGENTS.md is the shared source of truth; CLAUDE.md imports it via
+# @AGENTS.md so Claude Code and other agents stay in sync.
 #
 # Skills need care because this repo is public. Of the 46 installed, 45 come
 # from other people's repositories (40 from mattpocock/skills alone) — those
@@ -35,7 +37,9 @@ link() {
   echo "  linked $(basename "$dst")"
 }
 
+link "$DOTFILES/ai/AGENTS.md" "$HOME/.claude/AGENTS.md"
 link "$DOTFILES/ai/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
+link "$DOTFILES/ai/AGENTS.md" "$HOME/.agents/AGENTS.md"
 link "$DOTFILES/ai/settings.json" "$HOME/.claude/settings.json"
 link "$DOTFILES/ai/skill-lock.json" "$HOME/.agents/.skill-lock.json"
 
@@ -110,5 +114,18 @@ for skill in "$AGENTS_SKILLS"/*/; do
   esac
   link "$AGENTS_SKILLS/$name" "$CLAUDE_SKILLS/$name"
 done
+
+# agent-browser skill needs the CLI + a Chrome for Testing binary. Formula is
+# in the Brewfile; this only downloads Chromium when the CLI is already on PATH.
+if command -v agent-browser >/dev/null 2>&1; then
+  if [ ! -d "$HOME/.agent-browser/browsers" ] || [ -z "$(ls -A "$HOME/.agent-browser/browsers" 2>/dev/null)" ]; then
+    echo "  installing agent-browser Chromium"
+    agent-browser install
+  else
+    echo "  agent-browser Chromium already present"
+  fi
+else
+  echo "  agent-browser CLI not on PATH — brew bundle (Brewfile) then re-run"
+fi
 
 echo "  Claude configuration ready ($(ls "$CLAUDE_SKILLS" | wc -l | tr -d ' ') skills)"
