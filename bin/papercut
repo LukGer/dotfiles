@@ -53,18 +53,26 @@ const wrap = (text) =>
 // PAPERCUTS.md belongs at the repo root, but stays out of the shared .gitignore:
 // this is a personal log and colleagues shouldn't inherit it in a PR.
 const excludeFromGit = (file) => {
-  const commonDir = git("rev-parse", "--git-common-dir");
+  const commonDir = git("rev-parse", "--path-format=absolute", "--git-common-dir");
   if (!commonDir) return;
-  const dir = commonDir.startsWith("/") ? commonDir : join(process.cwd(), commonDir);
-  const exclude = join(dir, "info", "exclude");
+  const exclude = join(commonDir, "info", "exclude");
   const name = basename(file);
   if (existsSync(exclude) && readFileSync(exclude, "utf8").split("\n").includes(name)) return;
   mkdirSync(dirname(exclude), { recursive: true });
   appendFileSync(exclude, `\n# personal papercut log — see \`papercut\`\n${name}\n`);
 };
 
+// Always the main worktree, never the one you are standing in: linked worktrees
+// are often short-lived, and a log that vanishes with the workspace never gets
+// triaged. Null for a bare main repo, which has no working tree to write into.
+const mainWorktree = () => {
+  const [first, second] = (git("worktree", "list", "--porcelain") || "").split("\n");
+  if (!first?.startsWith("worktree ") || second === "bare") return null;
+  return first.slice("worktree ".length);
+};
+
 const target = () => {
-  const root = git("rev-parse", "--show-toplevel");
+  const root = mainWorktree();
   if (root) {
     const file = join(root, "PAPERCUTS.md");
     excludeFromGit(file);
