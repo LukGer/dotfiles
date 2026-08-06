@@ -1,7 +1,12 @@
 # .zshenv is sourced by every zsh invocation, including non-interactive ones
-# (scripts, `ssh host cmd`, editor tasks). It holds the minimum needed for a
-# non-interactive shell to find the node toolchain.
+# (scripts, `ssh host cmd`, editor tasks, agent sandboxes). It holds the minimum
+# needed for a non-interactive shell to find the toolchains and personal bins.
 #
-# Full PATH construction happens in zsh/path.zsh, sourced from .zshrc.
+# Full PATH construction happens in zsh/path.zsh, sourced from .zshrc; these
+# three entries are duplicated there, which `typeset -U path` collapses. They
+# live here because non-interactive shells never reach .zshrc, and agents run
+# `papercut` (a bun script in $DOTFILES/bin) from exactly such shells.
+export DOTFILES="$HOME/.dotfiles"
 export VOLTA_HOME="$HOME/.volta"
-export PATH="$VOLTA_HOME/bin:$PATH"
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$DOTFILES/bin:$VOLTA_HOME/bin:$BUN_INSTALL/bin:$PATH"
