@@ -30,3 +30,5 @@ window-colorspace = "display-p3"
 
 shell-integration-features = sudo
 bell-features = "system"
+
+keybind = alt+backspace=text:\x1b\x7f
