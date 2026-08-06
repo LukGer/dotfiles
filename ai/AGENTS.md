@@ -93,3 +93,14 @@ never estimate time for tasks ("this is a one-day change", "~1 hour of work", "q
 # validating this file has been read
 
 if i say "cuckoo", you say "Phil Haack has taught me well"
+# papercuts
+
+when you hit small friction while working — a documented command that doesn't exist, a tool call you had to retry a different way, a confusing or undocumented setup step, a flaky script, a stale cache, a misleading error, a non-obvious gotcha — log it with `papercut "message"`.
+
+do this in the moment, not at the end of the session. none of it is blocking, which is exactly why it goes unreported; logged together it shows where the repo needs sanding down.
+
+two or three sentences: what you were doing → what got in the way → a guess at the cause or fix, if you have one. write for someone who wasn't there. the bar is "it cost me a retry or a wrong turn".
+
+don't log a failure the docs correctly warned you about, or a test that failed because your code was wrong — those are yours, not the repo's. don't stop to fix the friction either: log it and carry on with the task.
+
+reading them back is not your job — the user runs `/papercuts` when they want them triaged.

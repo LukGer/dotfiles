@@ -4,7 +4,8 @@
 #
 # Links the global AGENTS.md / CLAUDE.md and settings.json, then restores
 # skills. AGENTS.md is the shared source of truth; CLAUDE.md imports it via
-# @AGENTS.md so Claude Code and other agents stay in sync.
+# @AGENTS.md so Claude Code and other agents stay in sync. Codex reads it from
+# ~/.codex/AGENTS.md.
 #
 # Skills need care because this repo is public. Of the 46 installed, 45 come
 # from other people's repositories (40 from mattpocock/skills alone) — those
@@ -37,9 +38,11 @@ link() {
   echo "  linked $(basename "$dst")"
 }
 
+mkdir -p "$HOME/.codex"
 link "$DOTFILES/ai/AGENTS.md" "$HOME/.claude/AGENTS.md"
 link "$DOTFILES/ai/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
 link "$DOTFILES/ai/AGENTS.md" "$HOME/.agents/AGENTS.md"
+link "$DOTFILES/ai/AGENTS.md" "$HOME/.codex/AGENTS.md"
 link "$DOTFILES/ai/settings.json" "$HOME/.claude/settings.json"
 link "$DOTFILES/ai/skill-lock.json" "$HOME/.agents/.skill-lock.json"
 

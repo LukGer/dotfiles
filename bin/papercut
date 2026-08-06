@@ -1,0 +1,153 @@
+#!/usr/bin/env bun
+//
+// Log a papercut — small friction hit while working — to PAPERCUTS.md.
+//
+// Agents are told to call this in the moment (see ai/AGENTS.md). It must never
+// punish them for doing so: every failure path prints a note and exits 0, since
+// a logging tool that returns non-zero teaches agents to stop logging.
+
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
+import { homedir } from "node:os";
+
+const WRAP = 80;
+const WONT_FIX = "## Won't fix";
+
+const git = (...args) => {
+  const p = Bun.spawnSync(["git", ...args], { stdout: "pipe", stderr: "ignore" });
+  return p.exitCode === 0 ? p.stdout.toString().trim() : null;
+};
+
+// Harness is detectable; the model is not — agents are unreliable narrators
+// about their own ID, so it only appears when passed explicitly via -m.
+const harness = () => {
+  const e = process.env;
+  if (e.CLAUDECODE || e.CLAUDE_CODE_ENTRYPOINT) return "claude-code";
+  if (e.CODEX_SANDBOX || e.CODEX_HOME || e.CODEX_THREAD_ID) return "codex";
+  if (e.CURSOR_AGENT || e.CURSOR_TRACE_ID) return "cursor";
+  if (e.OPENCODE || e.OPENCODE_BIN_PATH) return "opencode";
+  if (e.AI_AGENT) return e.AI_AGENT.split("_")[0];
+  return "shell";
+};
+
+const wrap = (text) =>
+  text
+    .split(/\n\s*\n/)
+    .map((para) => {
+      const words = para.split(/\s+/).filter(Boolean);
+      const lines = [];
+      let line = "";
+      for (const word of words) {
+        if (line && line.length + 1 + word.length > WRAP) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = line ? `${line} ${word}` : word;
+        }
+      }
+      if (line) lines.push(line);
+      return lines.join("\n");
+    })
+    .join("\n\n");
+
+// PAPERCUTS.md belongs at the repo root, but stays out of the shared .gitignore:
+// this is a personal log and colleagues shouldn't inherit it in a PR.
+const excludeFromGit = (file) => {
+  const commonDir = git("rev-parse", "--git-common-dir");
+  if (!commonDir) return;
+  const dir = commonDir.startsWith("/") ? commonDir : join(process.cwd(), commonDir);
+  const exclude = join(dir, "info", "exclude");
+  const name = basename(file);
+  if (existsSync(exclude) && readFileSync(exclude, "utf8").split("\n").includes(name)) return;
+  mkdirSync(dirname(exclude), { recursive: true });
+  appendFileSync(exclude, `\n# personal papercut log — see \`papercut\`\n${name}\n`);
+};
+
+const target = () => {
+  const root = git("rev-parse", "--show-toplevel");
+  if (root) {
+    const file = join(root, "PAPERCUTS.md");
+    excludeFromGit(file);
+    return { file, scope: git("rev-parse", "--abbrev-ref", "HEAD") || "detached" };
+  }
+  const dir = join(homedir(), ".papercuts");
+  mkdirSync(dir, { recursive: true });
+  const cwd = process.cwd();
+  return {
+    file: join(dir, `${basename(cwd) || "root"}.md`),
+    scope: cwd.replace(homedir(), "~"),
+  };
+};
+
+const SEED = "# Papercuts\n\nFriction hit while working here. Entries are removed once fixed — run `/papercuts`.\n";
+
+const write = (file, entry) => {
+  if (!existsSync(file)) {
+    writeFileSync(file, `${SEED}\n${entry}\n`);
+    return;
+  }
+  const body = readFileSync(file, "utf8");
+  const at = body.indexOf(`\n${WONT_FIX}`);
+  // Open entries live above the settled ones, so append means "before Won't fix".
+  if (at === -1) {
+    appendFileSync(file, `${body.endsWith("\n") ? "" : "\n"}\n${entry}\n`);
+    return;
+  }
+  const above = body.slice(0, at + 1).replace(/\n+$/, "\n");
+  writeFileSync(file, `${above}\n${entry}\n\n${body.slice(at + 1)}`);
+};
+
+const list = (file) => {
+  if (!existsSync(file)) {
+    console.log(`No papercuts yet (${file}).`);
+    return;
+  }
+  const body = readFileSync(file, "utf8");
+  const at = body.indexOf(`\n${WONT_FIX}`);
+  const open = at === -1 ? body : body.slice(0, at);
+  const count = (open.match(/^\d{4}-\d{2}-\d{2}T/gm) || []).length;
+  console.log(open.trimEnd());
+  console.log(`\n— ${count} open papercut${count === 1 ? "" : "s"} in ${file}`);
+};
+
+const usage = `papercut — log small friction to PAPERCUTS.md
+
+  papercut "what you were doing, what got in the way, a guess at the cause"
+  papercut -m claude-opus-5 "..."     record the model alongside the harness
+  echo "..." | papercut               read the message from stdin
+  papercut list                       show open papercuts for this repo
+
+Two or three sentences. Log it in the moment; don't stop to fix it.`;
+
+try {
+  const argv = process.argv.slice(2);
+  let model = null;
+  const words = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "-m" || argv[i] === "--model") model = argv[++i];
+    else words.push(argv[i]);
+  }
+
+  const { file, scope } = target();
+
+  if (words[0] === "list") {
+    list(file);
+    process.exit(0);
+  }
+
+  let message = words.join(" ").trim();
+  if (!message && !process.stdin.isTTY) message = readFileSync(0, "utf8").trim();
+  if (!message) {
+    console.log(usage);
+    process.exit(0);
+  }
+
+  const stamp = new Date().toISOString();
+  const who = model ? `${harness()}/${model}` : harness();
+  write(file, `${stamp} – ${who} – ${scope}\n\n${wrap(message)}`);
+  console.log(`papercut logged → ${file}`);
+} catch (error) {
+  console.error(`papercut: ${error.message} (not logged)`);
+}
+
+process.exit(0);
