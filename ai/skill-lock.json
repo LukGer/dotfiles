@@ -467,6 +467,15 @@
       "skillFolderHash": "343db72180d05814949fef7d46be96b5c6ee86b3",
       "installedAt": "2026-08-02T12:29:44.386Z",
       "updatedAt": "2026-08-02T12:29:44.386Z"
+    },
+    "before-and-after": {
+      "source": "vercel-labs/before-and-after",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/vercel-labs/before-and-after.git",
+      "skillPath": "skill/SKILL.md",
+      "skillFolderHash": "494b495538546c3a5594285e726970ff8f27a1ee",
+      "installedAt": "2026-08-10T06:30:25.534Z",
+      "updatedAt": "2026-08-10T06:30:25.534Z"
     }
   },
   "dismissed": {

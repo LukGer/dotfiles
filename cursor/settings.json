@@ -159,10 +159,10 @@
   "claudeCode.selectedModel": "default",
   "json.schemaDownload.enable": true,
   "cursor.composer.shouldChimeAfterChatFinishes": true,
-  "cursor.composer.usageSummaryDisplay": "always",
   "security.promptForLocalFileProtocolHandling": false,
   "workbench.colorTheme": "GitHub Dark",
   "window.autoDetectColorScheme": false,
   "workbench.agentsWindowButton.enabled": false,
-  "cursor.composer.editorConversationDensity": "detailed"
+  "cursor.composer.editorConversationDensity": "detailed",
+  "cursor.composer.usageSummaryDisplay": "always"
 }

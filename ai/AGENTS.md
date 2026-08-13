@@ -86,6 +86,10 @@ i prefer `gh stack` for git work. the `gh` cli with the `github/gh-stack` extens
 
 prefer `gh stack` over raw git for anything touching a stack - `gh stack rebase`, `gh stack submit`, `gh stack sync`. raw `git rebase` or `git push --force-with-lease` on a stacked branch bypasses stack base tracking and breaks the stack. only fall back to raw git when no `gh stack` equivalent exists.
 
+to inspect a stack without changing anything, use `gh stack view`. there is no `gh stack status` - guessing it just prints the help text.
+
+keep an entire stack in ONE workspace/worktree. never check out a stack branch in a second worktree (including agent-created `git worktree add` or temp worktrees) - a branch parked in another worktree can't be checked out, which breaks `gh stack` mid-command. to work on a different branch of the stack, move within the same workspace using `gh stack up` / `gh stack down` / `gh stack switch` / `gh stack checkout`. after `gh stack rebase`, check which branch HEAD landed on - it can leave you on the bottom branch, parking it.
+
 # time estimates
 
 never estimate time for tasks ("this is a one-day change", "~1 hour of work", "quick fix vs big refactor in time terms"). your training reflects how long humans take, not how long you take. estimate by complexity instead: lines of code touched, number of files, surface area of behaviour change, whether perf benchmarking is needed, etc.
