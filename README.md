@@ -34,8 +34,8 @@ Four conventions, all handled by `script/bootstrap` and `script/install`:
 | `zsh/*.zsh` | sourced at shell startup |
 
 The `config/` tree is the one addition to holman's design — his `*.symlink`
-rule can only produce `~/.foo`, and Ghostty, lsd, gh and Graphite all keep
-their config under `~/.config`.
+rule can only produce `~/.foo`, and Ghostty, lsd and gh all keep their
+config under `~/.config`.
 
 Run `dot` any time to pull, update Homebrew and re-run the installers.
 
@@ -44,12 +44,13 @@ Run `dot` any time to pull, update Homebrew and re-run the installers.
 | Topic | Contents |
 | --- | --- |
 | `zsh/` | zinit + Powerlevel10k, split into `path`/`config`/`aliases`/`functions`/`tools` |
-| `git/` | shared config, ~30 aliases, global gitignore, gitignored local identity |
+| `git/` | shared config, ~30 aliases, global gitignore, gitignored local identity; installs the `gh-stack` extension |
+| `node/` | installs Volta (node, npm, pnpm) and Bun when missing |
 | `homebrew/` | installs Homebrew itself; packages come from `Brewfile` |
 | `macos/` | `defaults write` settings, run manually |
 | `cursor/` | settings, keybindings, and the 17-extension list |
 | `ai/` | global `AGENTS.md` (shared) + `CLAUDE.md` import, Claude Code settings, skill lock file |
-| `config/` | Ghostty, lsd, gh, Graphite |
+| `config/` | Ghostty, lsd, gh |
 | `npm/` | `~/.npmrc` template (private registry token) |
 | `bin/` | `dot`, `e`, and a few git helpers; added to `PATH` |
 
@@ -62,6 +63,7 @@ Run `dot` any time to pull, update Homebrew and re-run the installers.
 | `git-nuke` | delete a branch locally and on origin; refuses the default branch |
 | `git-bclean` | delete local branches whose upstream is gone (`--force` to commit to it) |
 | `git-credit` | add a co-author trailer to the last commit |
+| `papercut` | log a small friction hit to `PAPERCUTS.md`; agents call it mid-task (see `ai/AGENTS.md`) |
 
 ## Secrets
 
@@ -76,12 +78,11 @@ The repo is public, so everything secret is kept out by construction:
   committed. Put machine-specific exports and API keys here.
 
 Deliberately **not** tracked, because each carries a live credential:
-`~/.config/gh/hosts.yml`, `~/.config/graphite/user_config`, `~/.claude.json`,
-`~/.cursor/mcp.json`, `~/.ssh/*`.
+`~/.config/gh/hosts.yml`, `~/.claude.json`, `~/.cursor/mcp.json`, `~/.ssh/*`.
 
 ### Skills
 
-45 of the 46 installed Claude skills come from other people's repositories.
+Nearly all installed Claude skills come from other people's repositories.
 Vendoring them into a public repo would republish someone else's work, so
 `ai/skill-lock.json` records where each came from and `ai/install.sh`
 re-fetches them on a new machine. Only self-authored skills live in

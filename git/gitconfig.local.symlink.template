@@ -18,3 +18,9 @@
 #
 # [includeIf "gitdir:~/dev/work/"]
 #	path = ~/.gitconfig.work
+
+# Background maintenance registrations are machine-specific, so they belong
+# here — but plain `git maintenance register` writes to the global config,
+# which is the shared committed file. Point it here instead:
+#
+#   git maintenance register --config-file ~/.gitconfig.local

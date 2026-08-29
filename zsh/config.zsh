@@ -20,3 +20,8 @@ zstyle ':fzf-tab:complete:cd:*' fzf-preview 'ls --color $realpath'
 
 # Keybindings
 bindkey "^f" autosuggest-accept
+
+# Editor for anything that shells out to $EDITOR: git commit, crontab, etc.
+# --wait blocks until the file is closed, which git needs. The value is
+# multi-word on purpose; bin/e and bin/dot expand it unquoted for that reason.
+export EDITOR="cursor --wait"

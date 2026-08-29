@@ -47,7 +47,3 @@
 
 [help]
 	autocorrect = 1
-
-[maintenance]
-	repo = /Users/lukasrideamigos/dev/unity
-	repo = /Users/lukasrideamigos/dev/commutehub-app

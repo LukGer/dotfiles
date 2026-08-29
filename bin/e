@@ -7,4 +7,5 @@
 #
 # CREDIT: https://github.com/holman/dotfiles/blob/master/bin/e
 
-exec "${EDITOR:-cursor}" "${1:-.}"
+# $EDITOR may carry flags ("cursor --wait"), so expand it unquoted.
+exec ${EDITOR:-cursor} "${1:-.}"

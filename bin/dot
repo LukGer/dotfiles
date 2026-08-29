@@ -28,7 +28,8 @@ while test $# -gt 0; do
 			displayUsageAndExit
 			;;
 		"-e"|"--edit")
-			exec "${EDITOR:-cursor}" "$DOTFILES"
+			# $EDITOR may carry flags ("cursor --wait"), so expand it unquoted.
+			exec ${EDITOR:-cursor} "$DOTFILES"
 			exit
 			;;
 		*)

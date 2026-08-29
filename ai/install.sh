@@ -7,9 +7,9 @@
 # @AGENTS.md so Claude Code and other agents stay in sync. Codex reads it from
 # ~/.codex/AGENTS.md.
 #
-# Skills need care because this repo is public. Of the 46 installed, 45 come
-# from other people's repositories (40 from mattpocock/skills alone) — those
-# are NOT committed here; committing them would republish someone else's work
+# Skills need care because this repo is public. Nearly all installed skills
+# come from other people's repositories (the bulk from mattpocock/skills) —
+# those are NOT committed here; committing them would republish someone's work
 # and leave it to rot at whatever revision it was vendored at. Instead
 # ai/skill-lock.json records where each came from and this script re-fetches
 # them. Only self-authored skills live in ai/skills/.
