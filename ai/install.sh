@@ -2,17 +2,18 @@
 #
 # Claude Code configuration.
 #
-# Links the global AGENTS.md / CLAUDE.md and settings.json, then restores
-# skills. AGENTS.md is the shared source of truth; CLAUDE.md imports it via
-# @AGENTS.md so Claude Code and other agents stay in sync. Codex reads it from
-# ~/.codex/AGENTS.md.
+# Links the global AGENTS.md / CLAUDE.md and settings.json, then restores and
+# updates skills. AGENTS.md is the shared source of truth; CLAUDE.md imports
+# it via @AGENTS.md so Claude Code and other agents stay in sync. Codex reads
+# it from ~/.codex/AGENTS.md.
 #
 # Skills need care because this repo is public. Nearly all installed skills
 # come from other people's repositories (the bulk from mattpocock/skills) —
 # those are NOT committed here; committing them would republish someone's work
 # and leave it to rot at whatever revision it was vendored at. Instead
-# ai/skill-lock.json records where each came from and this script re-fetches
-# them. Only self-authored skills live in ai/skills/.
+# ai/skill-lock.json records where each came from, this script re-fetches the
+# missing ones and the skills.sh CLI pulls the rest up to their latest
+# revisions. Only self-authored skills live in ai/skills/.
 
 set -e
 
@@ -104,7 +105,23 @@ PY
   done
 }
 
+# Skills already on disk are left at whatever revision they were first cloned
+# at, so refresh them through the skills.sh CLI. It owns the lock file (the
+# symlink above puts ~/.agents/.skill-lock.json in this repo) and records the
+# new revisions there, so a `dot` run leaves ai/skill-lock.json dirty whenever
+# an upstream skill has moved — commit it.
+update_skills() {
+  command -v npx >/dev/null 2>&1 || {
+    echo "  npx not found — skipping skill update"
+    return 0
+  }
+
+  echo "  updating skills from skills.sh"
+  npx -y skills@latest update -g -y || echo "    skill update failed — skills left at their current revisions"
+}
+
 restore_skills
+update_skills
 
 # Claude reads skills from ~/.claude/skills; point each one at ~/.agents/skills.
 # Skip *.backup directories — link() creates those when it replaces a real
