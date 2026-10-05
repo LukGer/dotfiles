@@ -45,12 +45,12 @@ Run `dot` any time to pull, update Homebrew and re-run the installers.
 | --- | --- |
 | `zsh/` | zinit + Powerlevel10k, split into `path`/`config`/`aliases`/`functions`/`tools` |
 | `git/` | shared config, ~30 aliases, global gitignore, gitignored local identity; installs the `gh-stack` extension |
-| `node/` | installs Volta (node, npm, pnpm) and Bun when missing |
+| `node/` | installs mise-managed toolchains and global CLIs, plus Bun when missing |
 | `homebrew/` | installs Homebrew itself; packages come from `Brewfile` |
 | `macos/` | `defaults write` settings, run manually |
 | `cursor/` | settings, keybindings, and the 17-extension list |
 | `ai/` | global `AGENTS.md` (shared) + `CLAUDE.md` import, Claude Code settings, skill lock file |
-| `config/` | Ghostty, lsd, gh |
+| `config/` | Ghostty, lsd, gh, mise defaults, GUI git-hook toolchain |
 | `npm/` | `~/.npmrc` template (private registry token) |
 | `bin/` | `dot`, `e`, and a few git helpers; added to `PATH` |
 
@@ -90,12 +90,22 @@ re-fetches them on a new machine. Only self-authored skills live in
 
 ## Notes
 
-- **Node** is managed by Volta, not brew or nvm. `zsh/path.zsh` puts
-  `$VOLTA_HOME/bin` ahead of `/opt/homebrew/bin` so Volta's shim wins — brew
-  has its own `node` as a transitive dependency. Check with `which -a node`.
-- **Volta's installer re-adds** its `PATH` export to `~/.zprofile` and
-  `~/.profile` on upgrade. It belongs only in `.zshenv`; delete the duplicates
-  if they come back.
+- **Node and pnpm** are managed by mise, installed through Homebrew. Global
+  defaults and CLI versions live in `config/mise/config.toml`; repository
+  `mise.toml` and `package.json#packageManager` pins take precedence. The global
+  Node default preserves 26.10.0; Unity selects 22.14.0 and pnpm 12.3.4.
+  See [mise's version-file guidance](https://mise.jdx.dev/configuration.html#idiomatic-version-files).
+- **Shells and GUI git hooks** put mise's shims ahead of Homebrew's transitive
+  Node installation. Interactive zsh also activates mise's directory-change
+  hook. Check with `mise current`, `which -a node`, and `node -v`; use
+  `mise install` and `mise exec -- pnpm install` for non-interactive setup.
+- **Migrating an existing machine:** remove old Volta exports from `~/.profile`
+  and any local shell overrides, then restart terminals and GUI apps. Before
+  deleting `~/.volta`, migrate its global CLI packages to mise. The tracked
+  mise config preserves the CLI versions from this machine's migration.
+- **Conductor setup** should use the repository's shared mise script. An old
+  `.conductor/settings.local.toml` in the main checkout can override it with
+  plain `pnpm install`; remove that setup override to inherit the shared one.
 - **Cursor and Claude Code rewrite their `settings.json`** when you change
   settings through the UI. They currently write in place, so the symlink
   survives — but if a settings change ever stops showing up in `git status`,

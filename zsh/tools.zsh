@@ -9,7 +9,9 @@ fi
 # bun completions
 [ -s "$BUN_INSTALL/_bun" ] && source "$BUN_INSTALL/_bun"
 
-# Volta manages pnpm as well as node/npm/yarn.
-export VOLTA_FEATURE_PNPM=1
+# mise selects project toolchains when the working directory changes.
+if command -v mise >/dev/null 2>&1; then
+  eval "$(mise activate zsh)"
+fi
 
 export UNITY_PATH="$HOME/dev/unity"

@@ -3,8 +3,8 @@
 #
 # Deliberately NOT listed:
 #   powerlevel10k — installed via zinit in zsh/zshrc.symlink; two copies conflict
-#   pnpm          — managed by Volta (VOLTA_FEATURE_PNPM=1 in zsh/tools.zsh)
-#   node          — managed by Volta; brew's copy is only a transitive dependency
+#   pnpm          — managed by mise; project versions come from packageManager
+#   node          — managed by mise; brew's copy is only a transitive dependency
 #
 # Cursor extensions are NOT tracked here either, even though `brew bundle dump`
 # emits them as `vscode` lines. They live in cursor/extensions.txt so there is
@@ -43,6 +43,7 @@ brew "nginx"
 # Ruby is here for cocoapods/fastlane, which need a newer interpreter than the
 # macOS system 2.6.
 brew "gnupg"
+brew "mise"
 brew "ruby@3.1"
 
 # --- Editors and terminals ---

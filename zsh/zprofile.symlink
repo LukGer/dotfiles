@@ -1,8 +1,11 @@
 # Login shells only. Homebrew's shellenv sets PATH, MANPATH, INFOPATH and a
-# few HOMEBREW_* variables; zsh/path.zsh reorders PATH afterwards so Volta
+# few HOMEBREW_* variables; mise's shims are restored afterwards so mise
 # still beats /opt/homebrew/bin for node.
 #
-# The Volta export that used to be duplicated here (and in ~/.profile) now
-# lives solely in .zshenv. Note that Volta's own installer re-adds it on
-# upgrade — if it reappears, delete it again.
+# Non-interactive login shells also need the shims after brew shellenv.
+# Interactive shells add mise's directory-change hook in zsh/tools.zsh.
+# Keep the shim activation here after Homebrew's PATH changes.
 eval "$(/opt/homebrew/bin/brew shellenv)"
+if command -v mise >/dev/null 2>&1; then
+  eval "$(mise activate zsh --shims)"
+fi

@@ -1,0 +1,14 @@
+[tools]
+node = "26.10.0"
+pnpm = "12.3.4"
+"npm:npm" = "11.5.2"
+"npm:yarn" = "1.22.22"
+"npm:@angular/cli" = "20.3.10"
+"npm:@earendil-works/pi-coding-agent" = "0.83.0"
+"npm:@mobiscroll/cli" = "1.15.0"
+"npm:@vercel/before-and-after" = "0.0.4"
+"npm:eas-cli" = "16.26.0"
+"npm:mcp-google-sheets-full" = { version = "0.2.0", allow_low_downloads = true }
+
+[settings]
+idiomatic_version_file_enable_tools = ["node", "pnpm", "yarn"]

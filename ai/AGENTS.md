@@ -80,6 +80,30 @@ often applying the simplicity rules removes them
 
 NOTE: never remove comments that are already present in the code, only edit comments you have added
 
+# this machine
+
+things that are true of my setup, not of any repo i work in. never write these
+into a repo's shared files - other developers have different machines.
+
+**node and pnpm come from mise.** if `pnpm` refuses a repo citing a pinned
+node version, check `mise current` and `node -v` against the repository pins.
+install and run the project's toolchain explicitly:
+
+```sh
+mise install
+mise exec -- pnpm install
+```
+
+mise's shims must precede homebrew's node for bare commands and git hooks:
+
+```sh
+export PATH="${MISE_DATA_DIR:-$HOME/.local/share/mise}/shims:$PATH"
+```
+
+project versions live in `mise.toml` and `package.json#packageManager`.
+Conductor scripts use `mise exec`; if setup runs plain `pnpm install`, check
+the main checkout's `.conductor/settings.local.toml` for a stale override.
+
 # gh stack
 
 i prefer `gh stack` for git work. the `gh` cli with the `github/gh-stack` extension should always be present on my machines - assume they are available.
