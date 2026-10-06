@@ -54,46 +54,61 @@ for skill in "$DOTFILES"/ai/skills/*/; do
   link "$DOTFILES/ai/skills/$name" "$AGENTS_SKILLS/$name"
 done
 
-# Third-party skills, restored from the lock file. Each distinct source repo is
-# shallow-cloned once into a temp dir, then every skill sourced from it is
-# copied out.
-restore_skills() {
-  lock="$DOTFILES/ai/skill-lock.json"
-  [ -f "$lock" ] || return 0
-  command -v python3 >/dev/null 2>&1 || {
-    echo "  python3 not found — skipping skill restore"
-    return 0
-  }
+# Third-party skills are synced against their source repos: skills deleted
+# upstream are removed, missing ones restored from the lock file, every skill
+# of a followed repo installed, and the rest updated to their latest revision.
+# Each distinct source repo is shallow-cloned once into a temp dir.
+LOCK="$DOTFILES/ai/skill-lock.json"
 
-  missing=$(python3 - "$lock" "$AGENTS_SKILLS" <<'PY'
-import json, os, sys
-lock, dest = sys.argv[1], sys.argv[2]
-skills = json.load(open(lock))["skills"]
-for name, meta in skills.items():
-    if not os.path.isdir(os.path.join(dest, name)):
-        print(f'{name}\t{meta["sourceUrl"]}\t{meta["skillPath"]}')
-PY
-)
+# `update` only refreshes skills already in the lock, so skills added upstream
+# never arrive. For repos we follow wholesale, install every skill they ship.
+FOLLOWED_SKILL_REPOS="mattpocock/skills"
 
-  if [ -z "$missing" ]; then
-    echo "  all $(python3 -c "import json;print(len(json.load(open('$lock'))['skills']))") locked skills already present"
-    return 0
+SOURCES=$(mktemp -d)
+# shellcheck disable=SC2064
+trap "rm -rf '$SOURCES'" EXIT
+
+# Prints the clone dir of a source repo, cloning it on first use.
+clone_source() {
+  repo_dir="$SOURCES/$(echo "$1" | tr '/:' '__')"
+  if [ ! -d "$repo_dir" ]; then
+    git clone --depth 1 --quiet "$1" "$repo_dir" 2>/dev/null || return 1
   fi
+  echo "$repo_dir"
+}
 
-  tmp=$(mktemp -d)
-  # shellcheck disable=SC2064
-  trap "rm -rf '$tmp'" EXIT
+# Prints name<TAB>sourceUrl<TAB>skillPath for every locked skill.
+locked_skills() {
+  python3 - "$LOCK" <<'PY2'
+import json, sys
+for name, meta in json.load(open(sys.argv[1]))["skills"].items():
+    print(f'{name}\t{meta["sourceUrl"]}\t{meta["skillPath"]}')
+PY2
+}
 
-  echo "$missing" | while IFS="$(printf '\t')" read -r name url path; do
-    [ -z "$name" ] && continue
-    repo_dir="$tmp/$(echo "$url" | tr '/:' '__')"
-    if [ ! -d "$repo_dir" ]; then
-      echo "  cloning $url"
-      git clone --depth 1 --quiet "$url" "$repo_dir" 2>/dev/null || {
-        echo "    failed to clone $url — skipping $name"
-        continue
-      }
-    fi
+# A skill is deprecated when its source repo no longer ships a skill of that
+# name anywhere — a skill that only moved directories is kept.
+prune_skills() {
+  locked_skills | while IFS="$(printf '\t')" read -r name url path; do
+    repo_dir=$(clone_source "$url") || {
+      echo "    failed to clone $url — keeping $name"
+      continue
+    }
+    [ -f "$repo_dir/$path" ] && continue
+    find "$repo_dir" -path "*/$name/SKILL.md" | grep -q . && continue
+    echo "  removing $name (deleted from $url)"
+    npx -y skills@latest remove "$name" -g -y >/dev/null ||
+      echo "    failed to remove $name"
+  done
+}
+
+restore_skills() {
+  locked_skills | while IFS="$(printf '\t')" read -r name url path; do
+    [ -d "$AGENTS_SKILLS/$name" ] && continue
+    repo_dir=$(clone_source "$url") || {
+      echo "    failed to clone $url — skipping $name"
+      continue
+    }
     # skillPath points at the SKILL.md; the skill is its containing directory.
     src_dir="$repo_dir/$(dirname "$path")"
     if [ -d "$src_dir" ]; then
@@ -105,23 +120,38 @@ PY
   done
 }
 
+add_followed_skills() {
+  for repo in $FOLLOWED_SKILL_REPOS; do
+    echo "  installing all skills from $repo"
+    npx -y skills@latest add "$repo" -g -s '*' -a universal -y >/dev/null ||
+      echo "    failed to install skills from $repo"
+  done
+}
+
 # Skills already on disk are left at whatever revision they were first cloned
 # at, so refresh them through the skills.sh CLI. It owns the lock file (the
 # symlink above puts ~/.agents/.skill-lock.json in this repo) and records the
 # new revisions there, so a `dot` run leaves ai/skill-lock.json dirty whenever
 # an upstream skill has moved — commit it.
 update_skills() {
-  command -v npx >/dev/null 2>&1 || {
-    echo "  npx not found — skipping skill update"
-    return 0
-  }
-
   echo "  updating skills from skills.sh"
   npx -y skills@latest update -g -y || echo "    skill update failed — skills left at their current revisions"
 }
 
-restore_skills
-update_skills
+if ! command -v python3 >/dev/null 2>&1 || ! command -v npx >/dev/null 2>&1; then
+  echo "  python3 or npx not found — skipping skill sync"
+elif [ -f "$LOCK" ]; then
+  prune_skills
+  restore_skills
+  add_followed_skills
+  update_skills
+fi
+
+# Drop links left behind by removed skills.
+find "$CLAUDE_SKILLS" -maxdepth 1 -type l ! -exec test -e {} \; -print | while read -r dead; do
+  rm "$dead"
+  echo "  unlinked $(basename "$dead")"
+done
 
 # Claude reads skills from ~/.claude/skills; point each one at ~/.agents/skills.
 # Skip *.backup directories — link() creates those when it replaces a real
