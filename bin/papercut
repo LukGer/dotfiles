@@ -12,6 +12,10 @@ import { homedir } from "node:os";
 
 const WRAP = 80;
 const WONT_FIX = "## Won't fix";
+// A papercut is two or three sentences. Anything past this is a pasted README,
+// PR body, or command output that an agent piped in by accident — truncate it
+// rather than letting one entry bury the whole log.
+const MAX_CHARS = 1500;
 
 const git = (...args) => {
   const p = Bun.spawnSync(["git", ...args], { stdout: "pipe", stderr: "ignore" });
@@ -148,6 +152,10 @@ try {
   if (!message) {
     console.log(usage);
     process.exit(0);
+  }
+
+  if (message.length > MAX_CHARS) {
+    message = `${message.slice(0, MAX_CHARS).trimEnd()}… [truncated ${message.length - MAX_CHARS} chars]`;
   }
 
   const stamp = new Date().toISOString();
