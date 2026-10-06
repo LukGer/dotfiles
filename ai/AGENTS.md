@@ -104,6 +104,22 @@ project versions live in `mise.toml` and `package.json#packageManager`.
 Conductor scripts use `mise exec`; if setup runs plain `pnpm install`, check
 the main checkout's `.conductor/settings.local.toml` for a stale override.
 
+**worktrees.** i work in conductor workspaces under `~/conductor/workspaces/`,
+which are linked worktrees; the git main worktree is `~/dev/unity`. most entries
+under a workspace dir are conductor alias symlinks pointing at the same few real
+dirs, and dead ones linger after a workspace is deleted - `git worktree list` is
+the only authority. a conductor workspace's local branch often tracks a
+differently-named remote branch, so prefer plain `git push` over
+`git push origin <branch>`.
+
+**git push failing with `RPC failed; HTTP 408`.** HTTP/2 to github.com stalls
+mid-pack on larger commits from my network, and `gh stack submit` inherits the
+failure. the commit is not too big:
+
+```sh
+git config http.version HTTP/1.1
+```
+
 # gh stack
 
 i prefer `gh stack` for git work. the `gh` cli with the `github/gh-stack` extension should always be present on my machines - assume they are available.
@@ -112,7 +128,13 @@ prefer `gh stack` over raw git for anything touching a stack - `gh stack rebase`
 
 to inspect a stack without changing anything, use `gh stack view`. there is no `gh stack status` - guessing it just prints the help text.
 
-keep an entire stack in ONE workspace/worktree. never check out a stack branch in a second worktree (including agent-created `git worktree add` or temp worktrees) - a branch parked in another worktree can't be checked out, which breaks `gh stack` mid-command. to work on a different branch of the stack, move within the same workspace using `gh stack up` / `gh stack down` / `gh stack switch` / `gh stack checkout`. after `gh stack rebase`, check which branch HEAD landed on - it can leave you on the bottom branch, parking it.
+keep an entire stack in ONE workspace/worktree. never check out a stack branch in a second worktree (including agent-created `git worktree add` or temp worktrees) - a branch parked in another worktree can't be checked out, which breaks `gh stack` mid-command. to work on a different branch of the stack, move within the same workspace.
+
+navigate with `gh stack checkout <branch>`, or `gh stack up` / `down` / `top` / `bottom` / `trunk` for relative moves. `gh stack switch` takes NO branch argument - it is an interactive picker, so passing a branch reads as an unknown subcommand and it is useless non-interactively.
+
+do not trust what a navigation command prints, trust `git branch --show-current`. `gh stack up` has announced "Already at the top of the stack" immediately after moving, and `gh stack down` has reported "1 branch down" while skipping a level. the same applies after `gh stack rebase` or `gh stack push`, which can leave HEAD on a different branch than you started on and park it. check after every command that walks the stack.
+
+never remove a stack branch with `git branch -D`. gh stack keeps it in its metadata, `gh stack view` still lists it, and `gh stack top` / `gh stack add` then die with a raw `failed to run git: error: pathspec <branch> did not match any file(s)`. there is no `gh stack remove` - restructure with `gh stack modify`; recovery from a raw delete is `gh stack unstack` plus a fresh `gh stack init`.
 
 # time estimates
 
