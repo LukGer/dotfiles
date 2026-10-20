@@ -13,7 +13,8 @@ tmux for Ghostty tabs and runs the reviews through the `pr-review` skill.
 ghd
 ```
 
-Opens gh-dash in a new Ghostty window. Needs Ghostty 1.3+ (AppleScript), `jq`
+Runs gh-dash in the current Ghostty tab, or in a new Ghostty window when
+started from another terminal. Needs Ghostty 1.3+ (AppleScript), `jq`
 (ships with macOS), and `gh`, `fzf`, `glow`, `delta` and the gh-dash
 extension, which `script/install` provides. The first run asks whether your shell may control
 Ghostty; allow it.

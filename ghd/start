@@ -1,4 +1,9 @@
 #!/bin/zsh
 # Usage: ghd start
+#
+# Runs gh-dash in this terminal when it is Ghostty, else in a new Ghostty
+# window. Starts from $HOME so gh-dash does not narrow its sections to the
+# repo you happen to be in.
 cd $HOME
+[[ $TERM_PROGRAM == ghostty ]] && exec gh dash
 exec ${0:A:h}/open window gh dash
