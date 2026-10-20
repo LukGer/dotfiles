@@ -28,6 +28,7 @@ brew "gh"
 # --- PR dashboard (bin/ghd) ---
 brew "git-delta"
 brew "glow"
+brew "tmux"
 
 # --- Mobile development (Expo / React Native) ---
 brew "cocoapods"

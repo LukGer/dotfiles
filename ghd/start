@@ -1,4 +1,6 @@
 #!/bin/zsh
 # Usage: ghd start
 cd $HOME
-exec ${0:A:h}/open window gh dash
+lib=${0:A:h}
+exec $lib/open shell env -u TMUX tmux -L ghd -f $lib/tmux.conf \
+  new-session -A -s ghd -n dashboard env TERM_PROGRAM=ghostty gh dash

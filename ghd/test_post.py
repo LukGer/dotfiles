@@ -1,5 +1,8 @@
 import importlib.util
+import json
+import os
 import pathlib
+import subprocess
 
 import pytest
 
@@ -21,6 +24,33 @@ PATCH = "\n".join([
     "\\ No newline at end of file",
 ])
 DIFF = {"f.ts": post.parse_patch(PATCH)}
+
+
+@pytest.mark.parametrize("review, message", [
+    ("older", "The saved review has no findings to post."),
+    ("newer", "The saved review has no findings to post."),
+    ("other-pr", "No saved review with findings for owner/repo#42."),
+])
+def test_post_cli_uses_the_requested_review_without_opening_a_picker(tmp_path, review, message):
+    store = tmp_path / "reviews"
+    store.mkdir()
+    for name, pr in (("older", 42), ("newer", 42), ("other-pr", 99)):
+        (store / f"{name}.json").write_text(json.dumps({
+            "repo": "owner/repo", "pr": pr, "at": name, "tool": "codex",
+        }))
+        (store / f"{name}.findings").write_text('{"findings": []}')
+    marker = tmp_path / "picker-was-opened"
+    fzf = tmp_path / "fzf"
+    fzf.write_text(f"#!/usr/bin/env python3\nfrom pathlib import Path\nPath({str(marker)!r}).touch()\n")
+    fzf.chmod(0o755)
+    result = subprocess.run(
+        [str(pathlib.Path(__file__).with_name("post.py")), "owner/repo", "42", "--review", str(store / f"{review}.findings")],
+        env={**os.environ, "GHD_STORE": str(store), "PATH": f"{tmp_path}:{os.environ['PATH']}"},
+        input="\n", text=True, capture_output=True, timeout=5,
+    )
+    assert result.returncode == 0, result.stderr
+    assert not marker.exists(), "the newly completed review should not need another review picker"
+    assert message in result.stdout
 
 
 def test_parse_patch_keeps_new_side_lines_with_their_hunk():

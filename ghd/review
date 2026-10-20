@@ -10,18 +10,25 @@ lib=${0:A:h}
 repo=$1 pr=$2 tool=$3
 
 if [[ -z $tool ]]; then
-  pick=$(printf '%s\n' Claude Codex 'Past reviews of this PR' 'Post to GitHub (pending)' \
-    | fzf --no-sort --height=~8 --header="Review $repo#$pr")
+  if [[ -n $TMUX ]]; then
+    selection=$(mktemp -t ghd-menu)
+    tmux display-popup -E -x C -y C -w 64 -h 10 -b rounded -T "Review $repo#$pr" \
+      -e "PATH=$PATH" "${(qq)lib}/menu > ${(qq)selection}"
+    pick=$(<$selection)
+    rm -f $selection
+  else
+    pick=$($lib/menu)
+  fi
   case $pick in
-    Claude) exec $lib/open tab $lib/review $repo $pr claude ;;
-    Codex) exec $lib/open tab $lib/review $repo $pr codex ;;
-    Past*) exec $lib/history.py $repo $pr ;;
-    Post*) exec $lib/post.py $repo $pr ;;
+    Claude) exec $lib/open popup $lib/review $repo $pr claude ;;
+    Codex) exec $lib/open popup $lib/review $repo $pr codex ;;
+    Past*) exec $lib/open popup $lib/history.py $repo $pr ;;
+    Post*) exec $lib/open popup $lib/post.py $repo $pr ;;
   esac
   exit 0
 fi
 
-fail() { print -u2 "$1"; read -k 1 '?Press any key...'; exit 1 }
+fail() { print -u2 "$1"; print -u2 'Press any key...'; read -k 1; exit 1 }
 
 IFS=$'\t' read -r title author head baseRef < <(gh pr view $pr --repo $repo \
   --json title,author,headRefOid,baseRefName -q '[.title, .author.login, .headRefOid, .baseRefName] | @tsv')
@@ -59,11 +66,19 @@ merge_base: ${merge_base:-none, no checkout: read the PR with gh pr diff}
 head: $head
 review_file: $out.md
 findings_file: $out.findings
-tool: $tool"
+tool: $tool
+For GitHub API reads, use gh api --method GET <endpoint>."
 
 case $tool in
-  claude) claude --setting-sources user --add-dir $store -n "#$pr review" "/pr-review $brief" ;;
-  codex) codex -s workspace-write -c sandbox_workspace_write.network_access=true \
+  claude)
+    permissions=("Edit(/$out.md)" "Edit(/$out.findings)"
+      'Bash(gh pr view *)' 'Bash(gh pr diff *)' 'Bash(gh api --method GET *)'
+      'Bash(git diff *)' 'Bash(git log *)' 'Bash(git show *)' 'Bash(git status *)')
+    claude -p --setting-sources user --add-dir $store --allowedTools "${(j:,:)permissions}" \
+      -n "#$pr review" "/pr-review $brief" ;;
+  codex) codex exec --skip-git-repo-check -s workspace-write -c sandbox_workspace_write.network_access=true \
     -c "projects.\"$PWD\".trust_level=\"untrusted\"" --add-dir $store "\$pr-review $brief" ;;
   *) fail "Unknown reviewer: $tool" ;;
-esac
+esac || fail "$tool review failed."
+[[ -s $out.md && -s $out.findings ]] || fail "$tool did not save the review and findings."
+$lib/view $repo $pr $out.md || fail "The review viewer exited with an error."

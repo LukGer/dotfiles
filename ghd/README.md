@@ -4,8 +4,9 @@
 any PR you can open the diff or full description in a tab, run a Claude or
 Codex review, and turn the findings you tick into a **pending** GitHub review.
 
-The idea and most of the original scripts are Valentin's; this version swaps
-tmux for Ghostty tabs and runs the reviews through the `pr-review` skill.
+The idea and most of the original scripts are Valentin's. This version uses
+Ghostty tabs for diffs and descriptions, an isolated tmux session for review
+popups, menus and pickers, and the `pr-review` skill for reviews.
 
 ## Start
 
@@ -13,25 +14,33 @@ tmux for Ghostty tabs and runs the reviews through the `pr-review` skill.
 ghd
 ```
 
-Opens gh-dash in a new Ghostty window. Needs Ghostty 1.3+ (AppleScript), `jq`
-(ships with macOS), and `gh`, `fzf`, `glow`, `delta` and the gh-dash
-extension, which `script/install` provides. The first run asks whether your shell may control
-Ghostty; allow it.
+Opens gh-dash in a new Ghostty window, inside its own tmux server (`-L ghd`)
+with no status bar or personal tmux configuration. Needs Ghostty 1.3+
+(AppleScript), `jq` (ships with macOS), and `gh`, `tmux` 3.3+, `fzf`, `glow`,
+`delta` and the gh-dash extension, which `script/install` provides. The first
+run asks whether your shell may control Ghostty; allow it.
+The dashboard runs as a command in Ghostty's configured shell. Quitting it
+returns to that same shell, preserving your configuration and shell integration.
 
 ## Keys
 
 | Key | Action |
 | --- | --- |
-| `ctrl+g` / `ctrl+t` | Claude / Codex review in a new tab |
+| `ctrl+g` / `ctrl+t` | Claude / Codex review in a popup in this window |
 | `f` | Menu: Claude, Codex, past reviews of this PR, post |
-| `E` | Past reviews of every PR: `enter` opens one in a tab, `ctrl-y` copies it |
+| `E` | Past reviews of every PR: `enter` reads one here, `ctrl-y` copies it |
 | `ctrl+o` | Post findings as a pending review |
 | `d` / `D` | Diff in a new tab, side by side |
 | `i` | Full PR description in a new tab |
 | `j` / `k` | Scroll the preview pane |
 
-gh-dash's own keys still work; `?` lists them. Menus and pickers open in a
-split below the dashboard and close when you are done.
+gh-dash's own keys still work; `?` lists them. The review menu floats in the
+centre of the dashboard; choose with `1`–`4` or the arrow keys and enter.
+History and posting pickers open in floating popups and close when you are done.
+Escape or `q` cancels the chooser. It uses a modal popup because
+[`tmux display-menu` returns immediately in tmux 3.8](https://github.com/tmux/tmux/blob/3.8/cmd-display-menu.c#L553),
+allowing gh-dash to repaint over an open native menu.
+To open URLs while tmux captures the mouse, use Cmd+Shift+click in Ghostty.
 
 ## Reviews
 
@@ -44,13 +53,22 @@ split below the dashboard and close when you are done.
    a repo with a `local-review` skill it runs those specialists against
    exactly the PR's diff; elsewhere it does one generic pass. Claude starts
    with `--setting-sources user`, so the PR cannot inject hooks or
-   permissions; Codex marks the worktree untrusted.
+   permissions. Its headless run preapproves the GitHub reads, git inspection
+   commands and writes to its two output files. Codex marks the worktree untrusted.
 3. The agent writes a markdown review and a findings file to
    `~/.local/share/gh-dash-reviews/` (`GHD_STORE` overrides). Each finding has
    a category (`bug`, `security`, `risk`, `quality`, `design`, `completeness`)
    and a severity (`P0`–`P3`, where `P3` is a nitpick).
-4. The worktree is removed when you quit the agent. Ask it to "save what we
-   discussed as an additional review" to add an ad-hoc review beside it.
+4. Claude and Codex run noninteractively in a popup in the dashboard window.
+   When both files are saved, the markdown opens automatically in that popup.
+   Press `q` to leave the reader, then `p` and enter to choose findings from
+   this exact review, or enter to return to the dashboard. The worktree is
+   removed when the popup closes. Failed runs or missing output pause with
+   an error until you press a key. Saved reviews from `E` use the same reader
+   and posting prompt.
+
+To save an additional review from a separate agent conversation, use
+`ghd save <repo> <pr> <tool> <markdown file> <findings file>`.
 
 ## Posting
 
@@ -65,16 +83,25 @@ split below the dashboard and close when you are done.
    with `(added by AI)`. A new review gets the agent's TLDR as its body.
 4. An existing pending review is added to, never replaced. Submit it on GitHub.
 
+`--review <findings file>` skips the review picker and uses that saved review,
+checking that it belongs to the requested PR. The completion prompt supplies
+this automatically.
+
 ## Files
 
 | File | Role |
 | --- | --- |
 | `bin/ghd` | dispatcher: `ghd <command>` runs `ghd/<command>` |
-| `start`, `open` | the dashboard window; new tabs, splits and windows via AppleScript |
+| `start`, `tmux.conf` | isolated dashboard session inside Ghostty's configured shell |
+| `open` | Ghostty tabs and windows via AppleScript; tmux popups |
 | `review` | menu, worktree, agent launch, cleanup |
+| `view` | read a saved review here and optionally post its findings |
+| `menu` | compact chooser with number shortcuts and no search input |
 | `post.py` | finding picker and pending-review GraphQL; `test_post.py` covers placement |
 | `history.py`, `save.py` | past reviews; ad-hoc saves |
 | `diff`, `pager`, `info` | diff and description viewers |
 | `config/gh-dash/config.yml` | sections and keys |
+| `test_ui.py` | keybindings, menu actions, popup routing and automatic review completion |
+| `test_menu.py` | real tmux/fzf lifecycle: choose a reviewer, read the result and return here |
 
 Tests: `uv run --with pytest pytest ghd`.

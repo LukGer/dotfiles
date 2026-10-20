@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Pick findings from a saved review and add them to your pending GitHub review.
 
-Usage: ghd post <owner/repo> <pr> [--dry]
+Usage: ghd post <owner/repo> <pr> [--dry] [--review <findings file>]
 
 Never submits: the review stays pending until you submit it on GitHub. An
 existing pending review is added to, never replaced.
 """
 from __future__ import annotations
 
+import argparse
 import glob
 import json
 import os
@@ -155,8 +156,10 @@ def pause(message: str) -> None:
         pass
 
 
-def pick_review(repo: str, pr: str) -> tuple[str, dict] | None:
+def pick_review(repo: str, pr: str, review_path: str | None = None) -> tuple[str, dict] | None:
     reviews = saved_reviews(repo, pr)
+    if review_path is not None:
+        return next((r for r in reviews if os.path.realpath(r[0]) == os.path.realpath(review_path)), None)
     if len(reviews) < 2:
         return reviews[0] if reviews else None
     rows = [f"{i}\t{m['at']}  {m['tool']:16}  {(m.get('title') or '')[:50]}\t{path[: -len('.findings')]}.md"
@@ -190,11 +193,15 @@ def pick_findings(findings: list[dict]) -> list[dict]:
 
 
 def main(argv: list[str]) -> None:
-    args = [a for a in argv if not a.startswith("--")]
-    dry = "--dry" in argv
-    repo, pr = args[0], args[1]
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("repo")
+    parser.add_argument("pr")
+    parser.add_argument("--dry", action="store_true")
+    parser.add_argument("--review", help="use this saved findings file without a review picker")
+    args = parser.parse_args(argv)
+    repo, pr, dry = args.repo, args.pr, args.dry
 
-    picked_review = pick_review(repo, pr)
+    picked_review = pick_review(repo, pr, args.review)
     if not picked_review:
         return pause(f"No saved review with findings for {repo}#{pr}. Run one first (ctrl+g / ctrl+t).")
     path, meta = picked_review

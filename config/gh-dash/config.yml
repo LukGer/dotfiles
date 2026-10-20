@@ -30,19 +30,19 @@ keybindings:
       command: ghd open tab ghd info {{.RepoName}} {{.PrNumber}}
     - key: ctrl+g
       name: claude review
-      command: ghd open tab ghd review {{.RepoName}} {{.PrNumber}} claude
+      command: ghd open popup ghd review {{.RepoName}} {{.PrNumber}} claude
     - key: ctrl+t
       name: codex review
-      command: ghd open tab ghd review {{.RepoName}} {{.PrNumber}} codex
+      command: ghd open popup ghd review {{.RepoName}} {{.PrNumber}} codex
     - key: f
       name: review menu
-      command: ghd open split ghd review {{.RepoName}} {{.PrNumber}}
+      command: ghd review {{.RepoName}} {{.PrNumber}}
     - key: E
       name: past reviews
-      command: ghd open split ghd history
+      command: ghd open popup ghd history
     - key: ctrl+o
       name: post review
-      command: ghd open split ghd post {{.RepoName}} {{.PrNumber}}
+      command: ghd open popup ghd post {{.RepoName}} {{.PrNumber}}
     - key: D
       name: diff in new tab
       command: ghd open tab ghd diff {{.RepoName}} {{.PrNumber}}

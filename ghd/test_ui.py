@@ -1,0 +1,231 @@
+import json
+import os
+from pathlib import Path
+import shlex
+import subprocess
+
+import pytest
+
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+@pytest.fixture
+def cli(tmp_path):
+    stub = tmp_path / "stub"
+    stub.write_text("""#!/usr/bin/env python3
+import json, os, pathlib, shlex, subprocess, sys
+name = pathlib.Path(sys.argv[0]).name
+args = sys.argv[1:]
+with open(os.environ['CALLS'], 'a') as f:
+    f.write(json.dumps([name, *args]) + '\\n')
+if name == 'osascript':
+    sys.stdin.read()
+    if os.environ.get('LAUNCH_SURFACE'):
+        code = subprocess.call(shlex.split(args[2]))
+        sys.exit(0 if args[1] == 'shell' else code)
+elif name == 'gh':
+    print('A review\\tauthor\\t1234567890\\tmain')
+elif name == 'git':
+    sys.exit(1)
+elif name == 'fzf':
+    print(os.environ.get('MENU_CHOICE', ''))
+elif name == 'tmux':
+    if os.environ.get('TMUX_FAIL'):
+        sys.exit(1)
+    child_env = {**os.environ, 'TERM_PROGRAM': 'tmux'}
+    if args[0] == 'display-popup' and (os.environ.get('RUN_POPUP') or
+        (os.environ.get('MENU_CHOICE') and args[args.index('-w') + 1] == '64')):
+        sys.exit(subprocess.call(args[-1], shell=True, env=child_env))
+elif name in ('codex', 'claude'):
+    if os.environ.get('AGENT_FAIL'):
+        sys.exit(1)
+    if not os.environ.get('MISSING_OUTPUT'):
+        for line in args[-1].splitlines():
+            for field in ('review_file: ', 'findings_file: '):
+                if line.startswith(field):
+                    pathlib.Path(line[len(field):]).write_text('{}')
+""")
+    stub.chmod(0o755)
+    for command in ("tmux", "osascript", "fzf", "gh", "git", "codex", "claude", "glow"):
+        (tmp_path / command).symlink_to(stub)
+    calls_file = tmp_path / "calls.jsonl"
+    env = {
+        **os.environ,
+        "PATH": f"{tmp_path}:{ROOT / 'bin'}:{os.environ['PATH']}",
+        "CALLS": str(calls_file),
+        "TERM_PROGRAM": "ghostty",
+        "TMUX": "/tmp/ghd-test,1,0",
+        "GHD_STORE": str(tmp_path / "reviews"),
+        "GHD_CODE_DIR": str(tmp_path / "clones"),
+    }
+
+    def run(*args, input_text="x", **overrides):
+        calls_file.write_text("")
+        result = subprocess.run(
+            [str(ROOT / "bin/ghd"), *args], env={**env, **overrides},
+            input=input_text, text=True, capture_output=True, timeout=10,
+        )
+        calls = [json.loads(line) for line in calls_file.read_text().splitlines()]
+        return result, calls
+
+    return run
+
+
+def key_command(key):
+    lines = (ROOT / "config/gh-dash/config.yml").read_text().splitlines()
+    start = lines.index(f"    - key: {key}")
+    return shlex.split(next(line.split("command: ", 1)[1] for line in lines[start:] if "command: " in line))
+
+
+def test_f_key_opens_a_floating_review_menu(cli):
+    command = [arg.replace("{{.RepoName}}", "owner/repo").replace("{{.PrNumber}}", "42")
+               for arg in key_command("f")]
+    result, calls = cli(*command[1:])
+    assert result.returncode == 0, result.stderr
+    menus = [args for name, *args in calls if name == "tmux" and args[0] == "display-popup"]
+    assert len(menus) == 1, calls
+    assert menus[0][menus[0].index("-w") + 1] == "64"
+    assert menus[0][menus[0].index("-h") + 1] == "10"
+    assert not any(name in ("fzf", "osascript") for name, *_ in calls)
+
+
+@pytest.mark.parametrize("key", ["E", "ctrl+o"])
+def test_picker_keys_open_popups(cli, key):
+    command = [arg.replace("{{.RepoName}}", "owner/repo").replace("{{.PrNumber}}", "42")
+               for arg in key_command(key)]
+    result, calls = cli(*command[1:])
+    assert result.returncode == 0, result.stderr
+    popups = [args for name, *args in calls if name == "tmux" and args[0] == "display-popup"]
+    assert len(popups) == 1, calls
+    assert "-E" in popups[0]
+    assert not any(name == "osascript" for name, *_ in calls)
+
+
+def test_dashboard_starts_in_isolated_tmux_even_from_another_session(cli):
+    result, calls = cli("start", LAUNCH_SURFACE="1")
+    assert result.returncode == 0, result.stderr
+    launches = [args for name, *args in calls if name == "tmux"]
+    assert len(launches) == 1, calls
+    args = launches[0]
+    assert args[:2] == ["-L", "ghd"]
+    assert "new-session" in args and "-A" in args
+    assert args[-2:] == ["gh", "dash"]
+
+
+@pytest.mark.parametrize("overrides", [{}, {"TMUX_FAIL": "1"}])
+def test_dashboard_uses_ghosttys_configured_shell(cli, overrides):
+    result, calls = cli("start", LAUNCH_SURFACE="1", **overrides)
+    assert result.returncode == 0, result.stderr
+    surfaces = [args for name, *args in calls if name == "osascript"]
+    assert len(surfaces) == 1, calls
+    assert surfaces[0][1] == "shell"
+    assert shlex.split(surfaces[0][2])[:4] == ["env", "-u", "TMUX", "tmux"]
+
+
+@pytest.mark.parametrize("tool, mode", [("codex", "exec"), ("claude", "-p")])
+def test_review_finishes_without_an_interactive_agent_prompt(cli, tool, mode):
+    result, calls = cli("review", "owner/repo", "42", tool)
+    assert result.returncode == 0, result.stderr
+    args = next(args for name, *args in calls if name == tool)
+    assert mode in args
+    if tool == "codex":
+        assert "--skip-git-repo-check" in args
+    else:
+        assert "--allowedTools" in args
+        allowed = args[args.index("--allowedTools") + 1].split(",")
+        output_paths = [line.split(": ", 1)[1] for line in args[-1].splitlines()
+                        if line.startswith(("review_file: ", "findings_file: "))]
+        assert {rule for rule in allowed if rule.startswith("Edit")} == {
+            f"Edit(/{path})" for path in output_paths
+        }
+
+
+@pytest.mark.parametrize("overrides", [{"AGENT_FAIL": "1"}, {"MISSING_OUTPUT": "1"}])
+def test_unsuccessful_review_does_not_silently_close(cli, overrides):
+    result, _ = cli("review", "owner/repo", "42", "codex", **overrides)
+    assert result.returncode != 0
+    assert "Press any key" in result.stderr
+
+
+@pytest.mark.parametrize("choice, tool", [("Claude", "claude"), ("Codex", "codex")])
+def test_menu_launches_review_in_the_dashboard_popup(cli, choice, tool):
+    result, calls = cli("review", "owner/repo", "42", MENU_CHOICE=choice)
+    assert result.returncode == 0, result.stderr
+    popups = [args for name, *args in calls if name == "tmux" and args[0] == "display-popup"]
+    assert len(popups) == 2, calls
+    assert shlex.split(popups[-1][-1])[-3:] == ["owner/repo", "42", tool]
+    assert not any(name == "osascript" for name, *_ in calls)
+
+
+@pytest.mark.parametrize("key, tool", [("ctrl+g", "claude"), ("ctrl+t", "codex")])
+def test_review_shortcuts_run_in_the_dashboard_popup(cli, key, tool):
+    command = [arg.replace("{{.RepoName}}", "owner/repo").replace("{{.PrNumber}}", "42")
+               for arg in key_command(key)]
+    result, calls = cli(*command[1:])
+    assert result.returncode == 0, result.stderr
+    popup = next(args for name, *args in calls if name == "tmux" and args[0] == "display-popup")
+    assert shlex.split(popup[-1])[-3:] == ["owner/repo", "42", tool]
+    assert not any(name == "osascript" for name, *_ in calls)
+
+
+@pytest.mark.parametrize("tool", ["claude", "codex"])
+def test_completed_review_opens_its_saved_markdown_before_returning(cli, tool):
+    result, calls = cli("review", "owner/repo", "42", tool, input_text="\n")
+    assert result.returncode == 0, result.stderr
+    agent = next(args for name, *args in calls if name == tool)
+    markdown = next(line.removeprefix("review_file: ") for line in agent[-1].splitlines()
+                    if line.startswith("review_file: "))
+    viewers = [args for name, *args in calls if name == "glow"]
+    assert len(viewers) == 1, calls
+    assert "-p" in viewers[0] and viewers[0][-1] == markdown
+
+
+def test_completed_review_can_post_its_own_findings_without_reselecting(cli, tmp_path):
+    store = tmp_path / "reviews"
+    store.mkdir()
+    (store / "other.json").write_text(json.dumps({
+        "repo": "owner/repo", "pr": 42, "at": "earlier", "tool": "codex",
+    }))
+    (store / "other.findings").write_text('{"findings": []}')
+    result, calls = cli("review", "owner/repo", "42", "codex", input_text="p\n\n")
+    assert result.returncode == 0, result.stderr
+    assert "The saved review has no findings to post." in result.stdout
+    assert not any(name == "fzf" for name, *_ in calls), "should post the review just displayed"
+
+
+def test_saved_review_opens_in_the_current_popup(cli, tmp_path):
+    store = tmp_path / "reviews"
+    store.mkdir()
+    markdown = store / "past.md"
+    markdown.write_text("# Past review")
+    markdown.with_suffix(".json").write_text(json.dumps({
+        "repo": "owner/repo", "pr": 42, "at": "earlier", "tool": "codex", "sha": "1234567890",
+    }))
+    result, calls = cli("history", MENU_CHOICE=str(markdown), input_text="\n")
+    assert result.returncode == 0, result.stderr
+    viewers = [args for name, *args in calls if name == "glow"]
+    assert len(viewers) == 1, calls
+    assert viewers[0][-1] == str(markdown)
+    assert not any(name == "osascript" for name, *_ in calls)
+
+
+def test_popup_can_open_a_ghostty_tab_with_literal_arguments(cli):
+    result, calls = cli("open", "popup", str(ROOT / "ghd/open"), "tab", "printf", "hello 'world' $HOME", RUN_POPUP="1")
+    assert result.returncode == 0, result.stderr
+    surfaces = [args for name, *args in calls if name == "osascript"]
+    assert len(surfaces) == 1, calls
+    assert shlex.split(surfaces[0][2]) == ["printf", "hello 'world' $HOME"]
+
+
+@pytest.mark.parametrize("choice, script", [
+    ("Past reviews of this PR", "history.py"),
+    ("Post to GitHub (pending)", "post.py"),
+])
+def test_menu_opens_the_selected_picker_in_a_larger_popup(cli, choice, script):
+    result, calls = cli("review", "owner/repo", "42", MENU_CHOICE=choice)
+    assert result.returncode == 0, result.stderr
+    popups = [args for name, *args in calls if name == "tmux" and args[0] == "display-popup"]
+    assert len(popups) == 2
+    assert popups[-1][popups[-1].index("-w") + 1] == "90%"
+    assert shlex.split(popups[-1][-1])[-3:] == [str(ROOT / "ghd" / script), "owner/repo", "42"]

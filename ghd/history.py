@@ -2,7 +2,7 @@
 """Browse saved reviews, newest first, with whether the PR moved since.
 
 Usage: ghd history [<owner/repo> <pr>]
-enter opens a review in a new tab, ctrl-y copies it to the clipboard.
+enter opens a review here, ctrl-y copies it to the clipboard.
 """
 from __future__ import annotations
 
@@ -63,13 +63,14 @@ def main(argv: list[str]) -> None:
 
     picked = subprocess.run(
         ["fzf", "--ansi", "--delimiter=\t", "--with-nth=2", "--no-sort",
-         "--header=enter: open in a tab   ctrl-y: copy   esc: close",
+         "--header=enter: read review   ctrl-y: copy   esc: close",
          "--bind", "ctrl-y:execute-silent(pbcopy < {1})+change-header(Copied to clipboard.)",
          "--preview", "glow -s dark -w $FZF_PREVIEW_COLUMNS {1}", "--preview-window=right:60%"],
         input="\n".join(rows), stdout=subprocess.PIPE, text=True,
     ).stdout.strip()
     if picked:
-        os.execv(f"{LIB}/open", [f"{LIB}/open", "tab", "glow", "-p", "-s", "dark", picked.split("\t")[0]])
+        meta = next(m for m in metas if m["file"] == picked.split("\t")[0])
+        os.execv(f"{LIB}/view", [f"{LIB}/view", meta["repo"], str(meta["pr"]), meta["file"]])
 
 
 if __name__ == "__main__":
