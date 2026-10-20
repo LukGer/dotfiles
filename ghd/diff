@@ -1,0 +1,11 @@
+#!/bin/zsh
+# Usage: ghd diff <owner/repo> <pr>
+#        ghd diff --file <path>   (the file is deleted after viewing)
+
+view() { delta --side-by-side --line-numbers --navigate --paging=always }
+if [[ $1 == --file ]]; then
+  view < $2
+  rm -f $2
+else
+  gh pr diff $2 --repo $1 | view
+fi

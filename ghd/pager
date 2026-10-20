@@ -1,0 +1,5 @@
+#!/bin/zsh
+# gh-dash diff pager: moves the piped diff into its own tab.
+f=$(mktemp -t ghd-diff)
+cat > $f
+exec ${0:A:h}/open tab ${0:A:h}/diff --file $f

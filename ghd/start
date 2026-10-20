@@ -1,0 +1,4 @@
+#!/bin/zsh
+# Usage: ghd start
+cd $HOME
+exec ${0:A:h}/open window gh dash

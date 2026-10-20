@@ -52,7 +52,8 @@ Run `dot` any time to pull, update Homebrew and re-run the installers.
 | `ai/` | global `AGENTS.md` (shared) + `CLAUDE.md` import, Claude Code settings, skill lock file |
 | `config/` | Ghostty, lsd, gh, mise defaults, GUI git-hook toolchain |
 | `npm/` | `~/.npmrc` template (private registry token) |
-| `bin/` | `dot`, `e`, and a few git helpers; added to `PATH` |
+| `bin/` | `dot`, `e`, `ghd`, and a few git helpers; added to `PATH` |
+| `ghd/` | the `ghd` PR dashboard: gh-dash plus agent reviews posted as pending GitHub reviews ([README](ghd/README.md)) |
 
 ### bin
 
@@ -60,6 +61,7 @@ Run `dot` any time to pull, update Homebrew and re-run the installers.
 | --- | --- |
 | `dot` | pull, `brew update`, re-run installers |
 | `e` | open a path in the editor (defaults to `.`) |
+| `ghd` | PR dashboard with agent reviews; see [`ghd/README.md`](ghd/README.md) |
 | `git-nuke` | delete a branch locally and on origin; refuses the default branch |
 | `git-bclean` | delete local branches whose upstream is gone (`--force` to commit to it) |
 | `git-credit` | add a co-author trailer to the last commit |
