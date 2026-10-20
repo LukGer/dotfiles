@@ -36,7 +36,7 @@ elif name == 'tmux':
     if args[0] == 'display-popup' and (os.environ.get('RUN_POPUP') or
         (os.environ.get('MENU_CHOICE') and args[args.index('-w') + 1] == '64')):
         sys.exit(subprocess.call(args[-1], shell=True, env=child_env))
-elif name in ('codex', 'claude'):
+elif name in ('opencode', 'claude'):
     if os.environ.get('CHECK_AGENT_INPUT'):
         with open(os.environ['CALLS'], 'a') as f:
             f.write(json.dumps(['agent-input', sys.stdin.read()]) + '\\n')
@@ -49,7 +49,7 @@ elif name in ('codex', 'claude'):
                     pathlib.Path(line[len(field):]).write_text('{}')
 """)
     stub.chmod(0o755)
-    for command in ("tmux", "osascript", "fzf", "gh", "git", "codex", "claude", "glow"):
+    for command in ("tmux", "osascript", "fzf", "gh", "git", "opencode", "claude", "glow"):
         (tmp_path / command).symlink_to(stub)
     calls_file = tmp_path / "calls.jsonl"
     env = {
@@ -127,14 +127,17 @@ def test_dashboard_runs_in_the_calling_terminal(cli, terminal, exit_code):
     assert f"TERM_PROGRAM={terminal}" in args
 
 
-@pytest.mark.parametrize("tool, mode", [("codex", "exec"), ("claude", "-p")])
+@pytest.mark.parametrize("tool, mode", [("opencode", "run"), ("claude", "-p")])
 def test_review_finishes_without_an_interactive_agent_prompt(cli, tool, mode):
     result, calls = cli("review", "owner/repo", "42", tool)
     assert result.returncode == 0, result.stderr
     args = next(args for name, *args in calls if name == tool)
     assert mode in args
-    if tool == "codex":
-        assert "--skip-git-repo-check" in args
+    assert args[args.index("--model") + 1] == (
+        "openai/gpt-6.1-sol#high" if tool == "opencode" else "claude-opus-5-5"
+    )
+    if tool == "opencode":
+        assert "pr-review" in args[-1]
     else:
         assert "--allowedTools" in args
         allowed = args[args.index("--allowedTools") + 1].split(",")
@@ -145,7 +148,7 @@ def test_review_finishes_without_an_interactive_agent_prompt(cli, tool, mode):
         }
 
 
-@pytest.mark.parametrize("tool", ["claude", "codex"])
+@pytest.mark.parametrize("tool", ["claude", "opencode"])
 def test_running_reviewer_cannot_consume_user_input(cli, tool):
     result, calls = cli("review", "owner/repo", "42", tool,
                         CHECK_AGENT_INPUT="1", input_text="\n")
@@ -155,13 +158,16 @@ def test_running_reviewer_cannot_consume_user_input(cli, tool):
 
 @pytest.mark.parametrize("overrides", [{"AGENT_FAIL": "1"}, {"MISSING_OUTPUT": "1"}])
 def test_unsuccessful_review_does_not_silently_close(cli, overrides):
-    result, _ = cli("review", "owner/repo", "42", "codex", **overrides)
+    result, _ = cli("review", "owner/repo", "42", "opencode", **overrides)
     assert result.returncode != 0
     assert "Press any key" in result.stderr
     assert (result.stdout + result.stderr).count("\a") == 1
 
 
-@pytest.mark.parametrize("choice, tool", [("Claude", "claude"), ("Codex", "codex")])
+@pytest.mark.parametrize("choice, tool", [
+    ("GPT-6.1 Sol · high · OpenCode", "opencode"),
+    ("Opus 5.5 · Claude Code", "claude"),
+])
 def test_menu_launches_review_in_the_dashboard_popup(cli, choice, tool):
     result, calls = cli("review", "owner/repo", "42", MENU_CHOICE=choice)
     assert result.returncode == 0, result.stderr
@@ -171,7 +177,7 @@ def test_menu_launches_review_in_the_dashboard_popup(cli, choice, tool):
     assert not any(name == "osascript" for name, *_ in calls)
 
 
-@pytest.mark.parametrize("key, tool", [("ctrl+g", "claude"), ("ctrl+t", "codex")])
+@pytest.mark.parametrize("key, tool", [("ctrl+g", "claude"), ("ctrl+t", "opencode")])
 def test_review_shortcuts_run_in_the_dashboard_popup(cli, key, tool):
     command = [arg.replace("{{.RepoName}}", "owner/repo").replace("{{.PrNumber}}", "42")
                for arg in key_command(key)]
@@ -182,7 +188,7 @@ def test_review_shortcuts_run_in_the_dashboard_popup(cli, key, tool):
     assert not any(name == "osascript" for name, *_ in calls)
 
 
-@pytest.mark.parametrize("tool", ["claude", "codex"])
+@pytest.mark.parametrize("tool", ["claude", "opencode"])
 def test_completed_review_opens_its_saved_markdown_before_returning(cli, tool):
     result, calls = cli("review", "owner/repo", "42", tool, input_text="\n")
     assert result.returncode == 0, result.stderr
@@ -202,7 +208,7 @@ def test_completed_review_can_post_its_own_findings_without_reselecting(cli, tmp
         "repo": "owner/repo", "pr": 42, "at": "earlier", "tool": "codex",
     }))
     (store / "other.findings").write_text('{"findings": []}')
-    result, calls = cli("review", "owner/repo", "42", "codex", input_text="p\n\n")
+    result, calls = cli("review", "owner/repo", "42", "opencode", input_text="p\n\n")
     assert result.returncode == 0, result.stderr
     assert "The saved review has no findings to post." in result.stdout
     assert not any(name == "fzf" for name, *_ in calls), "should post the review just displayed"

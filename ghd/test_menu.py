@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 @pytest.mark.skipif(any(not shutil.which(name) for name in ("tmux", "fzf", "glow", "less")),
                     reason="needs tmux, fzf, glow and less")
 @pytest.mark.parametrize("key, tool, paragraphs", [
-    (b"\x1b", None, 0), (b"q", None, 0), (b"1", "claude", 1), (b"2", "codex", 80),
+    (b"\x1b", None, 0), (b"q", None, 0), (b"1", "opencode", 1), (b"2", "claude", 80),
 ])
 def test_review_menu_waits_for_selection_before_returning_to_dashboard(tmp_path, key, tool, paragraphs):
     tmux = ["tmux", "-L", f"ghd-test-{uuid.uuid4().hex}"]
@@ -36,7 +36,7 @@ if name == 'gh':
     print('A review\\tauthor\\t1234567890\\tmain')
 elif name == 'git':
     sys.exit(1)
-elif name in ('codex', 'claude'):
+elif name in ('opencode', 'claude'):
     print('REVIEW-RUNNING', flush=True)
     deadline = time.monotonic() + 5
     while not pathlib.Path(os.environ['RELEASE_AGENT']).exists():
@@ -52,7 +52,7 @@ elif name == 'glow':
     os.execv(os.environ['REAL_GLOW'], ['glow', *args])
 """)
     stub.chmod(0o755)
-    for name in ("osascript", "gh", "git", "codex", "claude", "glow"):
+    for name in ("osascript", "gh", "git", "opencode", "claude", "glow"):
         (tmp_path / name).symlink_to(stub)
     env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "TERM": "xterm-256color",
            "CALLS": str(record), "GHD_STORE": str(tmp_path / "reviews"),
@@ -82,7 +82,7 @@ elif name == 'glow':
         )
         output = b""
         deadline = time.monotonic() + 5
-        while not all(label in output for label in (b"Claude", b"Codex", b"Past reviews", b"Post to GitHub")):
+        while not all(label in output for label in (b"GPT-6.1 Sol", b"OpenCode", b"Opus 5.5", b"Claude Code", b"Past reviews", b"Post to GitHub")):
             assert time.monotonic() < deadline, "menu did not draw all choices"
             if select.select([master], [], [], .05)[0]:
                 output += os.read(master, 65536)

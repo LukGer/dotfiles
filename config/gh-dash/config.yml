@@ -29,11 +29,11 @@ keybindings:
       name: full info in new tab
       command: ghd open tab ghd info {{.RepoName}} {{.PrNumber}}
     - key: ctrl+g
-      name: claude review
+      name: Opus 5.5 review (Claude Code)
       command: ghd open popup ghd review {{.RepoName}} {{.PrNumber}} claude
     - key: ctrl+t
-      name: codex review
-      command: ghd open popup ghd review {{.RepoName}} {{.PrNumber}} codex
+      name: GPT-6.1 Sol high review (OpenCode)
+      command: ghd open popup ghd review {{.RepoName}} {{.PrNumber}} opencode
     - key: f
       name: review menu
       command: ghd review {{.RepoName}} {{.PrNumber}}

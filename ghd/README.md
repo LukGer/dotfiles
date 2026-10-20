@@ -1,8 +1,8 @@
 # ghd: PR dashboard with agent reviews
 
 [gh-dash](https://github.com/dlvhdr/gh-dash) in your current terminal. From
-any PR you can open the diff or full description in a tab, run a Claude or
-Codex review, and turn the findings you tick into a **pending** GitHub review.
+any PR you can open the diff or full description in a tab, run a GPT-6.1 Sol or
+Opus 5.5 review, and turn the findings you tick into a **pending** GitHub review.
 
 The idea and most of the original scripts are Valentin's. This version uses
 Ghostty tabs for diffs and descriptions, an isolated tmux session for review
@@ -27,8 +27,8 @@ viewers run in place.
 
 | Key | Action |
 | --- | --- |
-| `ctrl+g` / `ctrl+t` | Claude / Codex review in a popup in this window |
-| `f` | Menu: Claude, Codex, past reviews of this PR, post |
+| `ctrl+g` / `ctrl+t` | Opus 5.5 (Claude Code) / GPT-6.1 Sol high (OpenCode) review in a popup in this window |
+| `f` | Menu: models with their harnesses, past reviews of this PR, post |
 | `E` | Past reviews of every PR: `enter` reads one here, `ctrl-y` copies it |
 | `ctrl+o` | Post findings as a pending review |
 | `d` / `D` | Diff in a new tab, side by side |
@@ -45,7 +45,9 @@ To open URLs while tmux captures the mouse, use Cmd+Shift+click in Ghostty.
 
 ## Reviews
 
-`ghd review <owner/repo> <pr> [claude|codex]` also works from any shell.
+`ghd review <owner/repo> <pr> [opencode|claude]` also works from any shell.
+The picker lists GPT-6.1 Sol (high thinking, OpenCode) first and Opus 5.5
+(Claude Code) second. Both launches pin the model explicitly.
 
 1. Fetches the PR into your clone at `~/dev/<repo>` (`GHD_CODE_DIR` overrides
    `~/dev`) and checks its head out into a detached worktree under
@@ -55,12 +57,13 @@ To open URLs while tmux captures the mouse, use Cmd+Shift+click in Ghostty.
    exactly the PR's diff; elsewhere it does one generic pass. Claude starts
    with `--setting-sources user`, so the PR cannot inject hooks or
    permissions. Its headless run preapproves the GitHub reads, git inspection
-   commands and writes to its two output files. Codex marks the worktree untrusted.
+    commands and writes to its two output files. OpenCode reads the skill from
+    this dotfiles checkout and uses its configured permissions.
 3. The agent writes a markdown review and a findings file to
    `~/.local/share/gh-dash-reviews/` (`GHD_STORE` overrides). Each finding has
    a category (`bug`, `security`, `risk`, `quality`, `design`, `completeness`)
    and a severity (`P0`–`P3`, where `P3` is a nitpick).
-4. Claude and Codex run noninteractively in a popup in the dashboard window.
+4. Claude Code and OpenCode run noninteractively in a popup in the dashboard window.
    Typing is hidden and discarded while the agent runs; Ctrl+C cancels.
    When both files are saved, a bell sounds and the markdown opens automatically
    in that popup, with keyboard input restored.

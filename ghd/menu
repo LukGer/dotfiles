@@ -1,5 +1,5 @@
 #!/bin/zsh
-printf '%s\n' Claude Codex 'Past reviews of this PR' 'Post to GitHub (pending)' Cancel \
+printf '%s\n' 'GPT-6.1 Sol · high · OpenCode' 'Opus 5.5 · Claude Code' 'Past reviews of this PR' 'Post to GitHub (pending)' Cancel \
   | fzf --no-sort --no-input --info=hidden --layout=reverse \
       --header='1–4: choose · enter: select · esc/q: cancel' \
       --bind='1:pos(1)+accept,2:pos(2)+accept,3:pos(3)+accept,4:pos(4)+accept,q:abort'
