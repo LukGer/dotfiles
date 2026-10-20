@@ -1,0 +1,69 @@
+#!/bin/zsh
+# Usage: ghd review <owner/repo> <pr> [claude|codex]
+#
+# Without a tool, shows the review menu. With one, checks the PR head out into
+# a throwaway detached worktree, runs the pr-review skill in it, and removes
+# the worktree when the agent exits. The agent only reads; this script owns
+# every git write.
+
+lib=${0:A:h}
+repo=$1 pr=$2 tool=$3
+
+if [[ -z $tool ]]; then
+  pick=$(printf '%s\n' Claude Codex 'Past reviews of this PR' 'Post to GitHub (pending)' \
+    | fzf --no-sort --height=~8 --header="Review $repo#$pr")
+  case $pick in
+    Claude) exec $lib/open tab $lib/review $repo $pr claude ;;
+    Codex) exec $lib/open tab $lib/review $repo $pr codex ;;
+    Past*) exec $lib/history.py $repo $pr ;;
+    Post*) exec $lib/post.py $repo $pr ;;
+  esac
+  exit 0
+fi
+
+fail() { print -u2 "$1"; read -k 1 '?Press any key...'; exit 1 }
+
+IFS=$'\t' read -r title author head baseRef < <(gh pr view $pr --repo $repo \
+  --json title,author,headRefOid,baseRefName -q '[.title, .author.login, .headRefOid, .baseRefName] | @tsv')
+[[ -n $head ]] || fail "Could not load $repo#$pr."
+printf '\n  \033[1;36m%s review\033[0m  %s#%s\n  %s  \033[2m(%s)\033[0m\n\n' $tool $repo $pr "$title" $author
+
+store=${GHD_STORE:-$HOME/.local/share/gh-dash-reviews}
+mkdir -p $store
+out=$store/$(date +%Y%m%d-%H%M%S)__${repo//\//_}__${pr}__${tool}
+
+clone=${GHD_CODE_DIR:-$HOME/dev}/${repo#*/}
+worktree=$HOME/.cache/ghd/${repo#*/}-$pr-${head[1,7]}-$tool
+merge_base=""
+if [[ $(git -C $clone remote get-url origin 2>/dev/null) == *[:/]$repo(.git|) ]]; then
+  print '  Fetching the PR into a detached worktree...'
+  git -C $clone fetch -q origin "refs/pull/$pr/head" "+refs/heads/${baseRef}:refs/remotes/origin/${baseRef}" \
+    || fail "Could not fetch $repo#$pr into $clone."
+  git -C $clone worktree remove --force $worktree 2>/dev/null
+  git -C $clone -c core.hooksPath=/dev/null worktree add -q --detach $worktree $head \
+    || fail "Could not create $worktree."
+  trap "git -C ${(q)clone} worktree remove --force ${(q)worktree}" EXIT
+  merge_base=$(git -C $clone merge-base origin/$baseRef $head)
+  cd $worktree
+else
+  print "  No clone of $repo in ${clone:h}, so this is a diff-only review."
+  cd $(mktemp -d -t ghd-review)
+fi
+
+jq -n --arg repo $repo --argjson pr $pr --arg tool $tool --arg sha $head --arg title $title \
+  --arg at "$(date '+%Y-%m-%d %H:%M')" '{repo: $repo, pr: $pr, tool: $tool, sha: $sha, title: $title, at: $at}' > $out.json
+
+brief="$repo#$pr
+base: $baseRef
+merge_base: ${merge_base:-none, no checkout: read the PR with gh pr diff}
+head: $head
+review_file: $out.md
+findings_file: $out.findings
+tool: $tool"
+
+case $tool in
+  claude) claude --setting-sources user --add-dir $store -n "#$pr review" "/pr-review $brief" ;;
+  codex) codex -s workspace-write -c sandbox_workspace_write.network_access=true \
+    -c "projects.\"$PWD\".trust_level=\"untrusted\"" --add-dir $store "\$pr-review $brief" ;;
+  *) fail "Unknown reviewer: $tool" ;;
+esac

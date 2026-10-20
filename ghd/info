@@ -1,0 +1,6 @@
+#!/bin/zsh
+# Usage: ghd info <owner/repo> <pr>
+gh pr view $2 --repo $1 \
+  --json title,author,body,headRefName,baseRefName,additions,deletions,changedFiles,labels,reviewRequests,state \
+  -q '"# \(.title)\n\n**\(.author.login)** · \(.state) · `\(.headRefName)` → `\(.baseRefName)` · +\(.additions) −\(.deletions) in \(.changedFiles) files\n\nReviewers: \([.reviewRequests[] | .login // .name] | join(", "))  \nLabels: \([.labels[].name] | join(", "))\n\n---\n\n\(.body)"' \
+  | glow -s dark -w $COLUMNS | less -R

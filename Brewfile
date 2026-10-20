@@ -25,6 +25,10 @@ brew "ripgrep"
 # --- Git and GitHub ---
 brew "gh"
 
+# --- PR dashboard (bin/ghd) ---
+brew "git-delta"
+brew "glow"
+
 # --- Mobile development (Expo / React Native) ---
 brew "cocoapods"
 brew "fastlane"

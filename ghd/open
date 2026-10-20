@@ -1,0 +1,28 @@
+#!/bin/zsh
+# Usage: ghd open tab|split|window <command> [args...]
+#
+# Runs the command in a new Ghostty surface with this shell's PATH and working
+# directory. Ghostty runs it as `exec -l <command>`, so it must be one command,
+# not a shell snippet. Outside Ghostty the command runs here instead.
+
+kind=$1; shift
+if [[ $TERM_PROGRAM != ghostty && $kind != window ]]; then
+  exec "$@"
+fi
+osascript - $kind "${(j: :)${(qq)@}}" $PWD "PATH=$PATH" >/dev/null <<'APPLESCRIPT'
+on run {kind, cmd, cwd, pathEnv}
+  tell application "Ghostty"
+    set cfg to new surface configuration
+    set command of cfg to cmd
+    set initial working directory of cfg to cwd
+    set environment variables of cfg to {pathEnv}
+    if kind is "window" then
+      new window with configuration cfg
+    else if kind is "tab" then
+      new tab in front window with configuration cfg
+    else
+      split (focused terminal of selected tab of front window) direction down with configuration cfg
+    end if
+  end tell
+end run
+APPLESCRIPT

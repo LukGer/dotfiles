@@ -1,0 +1,13 @@
+#!/bin/zsh
+#
+# PR dashboard: gh-dash in its own Ghostty window, with agent reviews you can
+# post as a pending GitHub review. See ghd/README.md.
+
+lib=${0:A:h:h}/ghd
+cmd=${1:-start}
+(( $# )) && shift
+for f in $lib/$cmd $lib/$cmd.py; do
+  [[ -f $f && -x $f ]] && exec $f "$@"
+done
+print -u2 "usage: ghd [start|review|post|history|info|diff|open|save] ..."
+exit 1

@@ -1,0 +1,48 @@
+# gh-dash, run by `ghd`. Keys and scripts are explained in ghd/README.md.
+prSections:
+  - title: My PRs - needs approval
+    filters: is:open author:@me -review:approved archived:false
+  - title: My PRs - approved
+    filters: is:open author:@me review:approved archived:false
+  - title: Review requested
+    filters: is:open review-requested:@me archived:false
+defaults:
+  preview:
+    open: true
+    width: 70
+  prsLimit: 30
+  refetchIntervalMinutes: 5
+pager:
+  diff: ghd pager
+keybindings:
+  universal:
+    - key: up
+      builtin: up
+    - key: down
+      builtin: down
+    - key: j
+      builtin: pageDown
+    - key: k
+      builtin: pageUp
+  prs:
+    - key: i
+      name: full info in new tab
+      command: ghd open tab ghd info {{.RepoName}} {{.PrNumber}}
+    - key: ctrl+g
+      name: claude review
+      command: ghd open tab ghd review {{.RepoName}} {{.PrNumber}} claude
+    - key: ctrl+t
+      name: codex review
+      command: ghd open tab ghd review {{.RepoName}} {{.PrNumber}} codex
+    - key: f
+      name: review menu
+      command: ghd open split ghd review {{.RepoName}} {{.PrNumber}}
+    - key: E
+      name: past reviews
+      command: ghd open split ghd history
+    - key: ctrl+o
+      name: post review
+      command: ghd open split ghd post {{.RepoName}} {{.PrNumber}}
+    - key: D
+      name: diff in new tab
+      command: ghd open tab ghd diff {{.RepoName}} {{.PrNumber}}
