@@ -37,6 +37,9 @@ elif name == 'tmux':
         (os.environ.get('MENU_CHOICE') and args[args.index('-w') + 1] == '64')):
         sys.exit(subprocess.call(args[-1], shell=True, env=child_env))
 elif name in ('codex', 'claude'):
+    if os.environ.get('CHECK_AGENT_INPUT'):
+        with open(os.environ['CALLS'], 'a') as f:
+            f.write(json.dumps(['agent-input', sys.stdin.read()]) + '\\n')
     if os.environ.get('AGENT_FAIL'):
         sys.exit(1)
     if not os.environ.get('MISSING_OUTPUT'):
@@ -142,11 +145,20 @@ def test_review_finishes_without_an_interactive_agent_prompt(cli, tool, mode):
         }
 
 
+@pytest.mark.parametrize("tool", ["claude", "codex"])
+def test_running_reviewer_cannot_consume_user_input(cli, tool):
+    result, calls = cli("review", "owner/repo", "42", tool,
+                        CHECK_AGENT_INPUT="1", input_text="\n")
+    assert result.returncode == 0, result.stderr
+    assert [call for call in calls if call[0] == "agent-input"] == [["agent-input", ""]]
+
+
 @pytest.mark.parametrize("overrides", [{"AGENT_FAIL": "1"}, {"MISSING_OUTPUT": "1"}])
 def test_unsuccessful_review_does_not_silently_close(cli, overrides):
     result, _ = cli("review", "owner/repo", "42", "codex", **overrides)
     assert result.returncode != 0
     assert "Press any key" in result.stderr
+    assert (result.stdout + result.stderr).count("\a") == 1
 
 
 @pytest.mark.parametrize("choice, tool", [("Claude", "claude"), ("Codex", "codex")])
@@ -180,6 +192,7 @@ def test_completed_review_opens_its_saved_markdown_before_returning(cli, tool):
     viewers = [args for name, *args in calls if name == "glow"]
     assert len(viewers) == 1, calls
     assert "-p" in viewers[0] and viewers[0][-1] == markdown
+    assert result.stdout.count("\a") == 1
 
 
 def test_completed_review_can_post_its_own_findings_without_reselecting(cli, tmp_path):

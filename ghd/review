@@ -28,7 +28,17 @@ if [[ -z $tool ]]; then
   exit 0
 fi
 
-fail() { print -u2 "$1"; print -u2 'Press any key...'; read -k 1; exit 1 }
+bell() {
+  local terminal
+  [[ -n $TMUX ]] && terminal=$(tmux display-message -p '#{client_tty}' 2>/dev/null)
+  if [[ -n $terminal && -w $terminal ]]; then
+    printf '\a' > $terminal
+  else
+    printf '\a'
+  fi
+}
+
+fail() { bell; print -u2 "$1"; print -u2 'Press any key...'; read -k 1; exit 1 }
 
 IFS=$'\t' read -r title author head baseRef < <(gh pr view $pr --repo $repo \
   --json title,author,headRefOid,baseRefName -q '[.title, .author.login, .headRefOid, .baseRefName] | @tsv')
@@ -69,16 +79,18 @@ findings_file: $out.findings
 tool: $tool
 For GitHub API reads, use gh api --method GET <endpoint>."
 
+print '  Reviewing… keyboard input is paused (Ctrl+C cancels).'
 case $tool in
   claude)
     permissions=("Edit(/$out.md)" "Edit(/$out.findings)"
       'Bash(gh pr view *)' 'Bash(gh pr diff *)' 'Bash(gh api --method GET *)'
       'Bash(git diff *)' 'Bash(git log *)' 'Bash(git show *)' 'Bash(git status *)')
-    claude -p --setting-sources user --add-dir $store --allowedTools "${(j:,:)permissions}" \
+    python3 $lib/noninteractive.py claude -p --setting-sources user --add-dir $store --allowedTools "${(j:,:)permissions}" \
       -n "#$pr review" "/pr-review $brief" ;;
-  codex) codex exec --skip-git-repo-check -s workspace-write -c sandbox_workspace_write.network_access=true \
+  codex) python3 $lib/noninteractive.py codex exec --skip-git-repo-check -s workspace-write -c sandbox_workspace_write.network_access=true \
     -c "projects.\"$PWD\".trust_level=\"untrusted\"" --add-dir $store "\$pr-review $brief" ;;
   *) fail "Unknown reviewer: $tool" ;;
 esac || fail "$tool review failed."
 [[ -s $out.md && -s $out.findings ]] || fail "$tool did not save the review and findings."
+bell
 $lib/view $repo $pr $out.md || fail "The review viewer exited with an error."

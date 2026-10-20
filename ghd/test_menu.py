@@ -24,7 +24,7 @@ def test_review_menu_waits_for_selection_before_returning_to_dashboard(tmp_path,
     record = tmp_path / "calls.jsonl"
     stub = tmp_path / "stub"
     stub.write_text("""#!/usr/bin/env python3
-import json, os, pathlib, sys
+import json, os, pathlib, sys, termios, time
 name = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
 with open(os.environ['CALLS'], 'a') as f:
@@ -34,10 +34,16 @@ if name == 'gh':
 elif name == 'git':
     sys.exit(1)
 elif name in ('codex', 'claude'):
+    print('REVIEW-RUNNING', flush=True)
+    deadline = time.monotonic() + 5
+    while not pathlib.Path(os.environ['RELEASE_AGENT']).exists():
+        assert time.monotonic() < deadline, 'agent was never released'
+        time.sleep(.01)
     for line in args[-1].splitlines():
         if line.startswith(('review_file: ', 'findings_file: ')):
             pathlib.Path(line.split(': ', 1)[1]).write_text('{}')
 elif name == 'glow':
+    assert termios.tcgetattr(sys.stdin.fileno())[3] & termios.ECHO, 'input was not restored'
     print('REVIEW-READY', flush=True)
     input()
 """)
@@ -46,6 +52,7 @@ elif name == 'glow':
         (tmp_path / name).symlink_to(stub)
     env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "TERM": "xterm-256color",
            "CALLS": str(record), "GHD_STORE": str(tmp_path / "reviews"),
+           "RELEASE_AGENT": str(tmp_path / "release"),
            "GHD_CODE_DIR": str(tmp_path / "missing")}
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
@@ -79,10 +86,23 @@ elif name == 'glow':
         if tool:
             output = b""
             deadline = time.monotonic() + 5
+            while b"REVIEW-RUNNING" not in output:
+                assert time.monotonic() < deadline, "review did not start"
+                if select.select([master], [], [], .05)[0]:
+                    output += os.read(master, 65536)
+            os.write(master, b"ignored-input\np\n")
+            if select.select([master], [], [], .1)[0]:
+                output += os.read(master, 65536)
+            assert b"ignored-input" not in output, "typing was echoed during the review"
+            (tmp_path / "release").touch()
             while b"REVIEW-READY" not in output:
                 assert time.monotonic() < deadline, "completed review was not shown in the popup"
                 if select.select([master], [], [], .05)[0]:
                     output += os.read(master, 65536)
+            assert b"\a" in output, "completion bell did not reach the outer terminal"
+            if select.select([master], [], [], .1)[0]:
+                output += os.read(master, 65536)
+            assert b"choose findings to post" not in output, "queued typing dismissed the review"
             assert menu.poll() is None, "review viewer should stay open until dismissed"
             os.write(master, b"\n")
             output = b""

@@ -61,12 +61,18 @@ To open URLs while tmux captures the mouse, use Cmd+Shift+click in Ghostty.
    a category (`bug`, `security`, `risk`, `quality`, `design`, `completeness`)
    and a severity (`P0`–`P3`, where `P3` is a nitpick).
 4. Claude and Codex run noninteractively in a popup in the dashboard window.
-   When both files are saved, the markdown opens automatically in that popup.
+   Typing is hidden and discarded while the agent runs; Ctrl+C cancels.
+   When both files are saved, a bell sounds and the markdown opens automatically
+   in that popup, with keyboard input restored.
    Press `q` to leave the reader, then `p` and enter to choose findings from
    this exact review, or enter to return to the dashboard. The worktree is
    removed when the popup closes. Failed runs or missing output pause with
    an error until you press a key. Saved reviews from `E` use the same reader
    and posting prompt.
+
+The alert uses the standard terminal bell (BEL). In tmux popups it is sent
+directly to the attached terminal because popup output does not forward bells.
+Ghostty's `bell-features = system` setting plays the macOS alert sound.
 
 To save an additional review from a separate agent conversation, use
 `ghd save <repo> <pr> <tool> <markdown file> <findings file>`.
@@ -96,6 +102,7 @@ this automatically.
 | `start`, `tmux.conf` | isolated dashboard session in the current terminal |
 | `open` | Ghostty tabs and windows via AppleScript; tmux popups |
 | `review` | menu, worktree, agent launch, cleanup |
+| `noninteractive.py` | run the agent with stdin closed, suppress typing and restore terminal input |
 | `view` | read a saved review here and optionally post its findings |
 | `menu` | compact chooser with number shortcuts and no search input |
 | `post.py` | finding picker and pending-review GraphQL; `test_post.py` covers placement |
