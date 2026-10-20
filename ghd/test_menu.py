@@ -17,9 +17,12 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 
 
-@pytest.mark.skipif(not shutil.which("tmux") or not shutil.which("fzf"), reason="needs tmux and fzf")
-@pytest.mark.parametrize("key, tool", [(b"\x1b", None), (b"q", None), (b"1", "claude"), (b"2", "codex")])
-def test_review_menu_waits_for_selection_before_returning_to_dashboard(tmp_path, key, tool):
+@pytest.mark.skipif(any(not shutil.which(name) for name in ("tmux", "fzf", "glow", "less")),
+                    reason="needs tmux, fzf, glow and less")
+@pytest.mark.parametrize("key, tool, paragraphs", [
+    (b"\x1b", None, 0), (b"q", None, 0), (b"1", "claude", 1), (b"2", "codex", 80),
+])
+def test_review_menu_waits_for_selection_before_returning_to_dashboard(tmp_path, key, tool, paragraphs):
     tmux = ["tmux", "-L", f"ghd-test-{uuid.uuid4().hex}"]
     record = tmp_path / "calls.jsonl"
     stub = tmp_path / "stub"
@@ -41,11 +44,12 @@ elif name in ('codex', 'claude'):
         time.sleep(.01)
     for line in args[-1].splitlines():
         if line.startswith(('review_file: ', 'findings_file: ')):
-            pathlib.Path(line.split(': ', 1)[1]).write_text('{}')
+            file = pathlib.Path(line.split(': ', 1)[1])
+            file.write_text('# REVIEW-READY\\n\\n' + 'Review paragraph.\\n\\n' * int(os.environ['REVIEW_PARAGRAPHS'])
+                            + 'REVIEW-END\\n' if file.suffix == '.md' else '{}')
 elif name == 'glow':
     assert termios.tcgetattr(sys.stdin.fileno())[3] & termios.ECHO, 'input was not restored'
-    print('REVIEW-READY', flush=True)
-    input()
+    os.execv(os.environ['REAL_GLOW'], ['glow', *args])
 """)
     stub.chmod(0o755)
     for name in ("osascript", "gh", "git", "codex", "claude", "glow"):
@@ -53,6 +57,8 @@ elif name == 'glow':
     env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "TERM": "xterm-256color",
            "CALLS": str(record), "GHD_STORE": str(tmp_path / "reviews"),
            "RELEASE_AGENT": str(tmp_path / "release"),
+           "REAL_GLOW": shutil.which("glow"), "REVIEW_PARAGRAPHS": str(paragraphs),
+           "PAGER": "less -R", "LESS": "",
            "GHD_CODE_DIR": str(tmp_path / "missing")}
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
@@ -102,15 +108,16 @@ elif name == 'glow':
             assert b"\a" in output, "completion bell did not reach the outer terminal"
             if select.select([master], [], [], .1)[0]:
                 output += os.read(master, 65536)
-            assert b"choose findings to post" not in output, "queued typing dismissed the review"
-            assert menu.poll() is None, "review viewer should stay open until dismissed"
-            os.write(master, b"\n")
-            output = b""
+            if paragraphs > 1:
+                assert b"choose findings to post" not in output, "long reviews must remain scrollable"
+                os.write(master, b"G")
             deadline = time.monotonic() + 5
             while b"choose findings to post" not in output:
-                assert time.monotonic() < deadline, "posting prompt was not shown after the review"
+                assert time.monotonic() < deadline, "reader required quitting before the posting prompt"
                 if select.select([master], [], [], .05)[0]:
                     output += os.read(master, 65536)
+            assert b"REVIEW-END" in output, "review text should stay visible before choosing to post"
+            assert b"no findings to post" not in output, "queued typing chose to post"
             assert menu.poll() is None, "posting should remain a user choice"
             os.write(master, b"\n")
         stdout, stderr = menu.communicate(timeout=5)
@@ -126,7 +133,7 @@ elif name == 'glow':
         subprocess.run([*tmux, "kill-server"], env=env, capture_output=True)
         for process in (menu, client):
             if process and process.poll() is None:
-                process.terminate()
+                process.kill()
                 process.wait(timeout=5)
         os.close(master)
         os.close(slave)

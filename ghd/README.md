@@ -64,9 +64,11 @@ To open URLs while tmux captures the mouse, use Cmd+Shift+click in Ghostty.
    Typing is hidden and discarded while the agent runs; Ctrl+C cancels.
    When both files are saved, a bell sounds and the markdown opens automatically
    in that popup, with keyboard input restored.
-   Press `q` to leave the reader, then `p` and enter to choose findings from
-   this exact review, or enter to return to the dashboard. The worktree is
-   removed when the popup closes. Failed runs or missing output pause with
+   Short reviews show the posting prompt immediately. For longer reviews,
+   scroll to the end to advance automatically; `q` also leaves the reader early.
+   Press `p` and enter to choose findings from this exact review, or enter to
+   return to the dashboard. The worktree is removed when the popup closes.
+   Failed runs or missing output pause with
    an error until you press a key. Saved reviews from `E` use the same reader
    and posting prompt.
 

@@ -3,7 +3,7 @@
 lib=${0:A:h}
 repo=$1 pr=$2 file=$3
 
-glow -p -s dark $file || exit 1
+PAGER='less -RFXE' glow -p -s dark $file || exit 1
 read -r 'action?[p] choose findings to post · [enter] dashboard > '
 if [[ $action == p ]]; then
   $lib/post.py $repo $pr --review ${file%.md}.findings
