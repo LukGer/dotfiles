@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Usage: ghd open tab|split|window|shell|popup <command> [args...]
+# Usage: ghd open tab|split|window|popup <command> [args...]
 #
 # Runs the command in a new Ghostty surface with this shell's PATH and working
 # directory. Ghostty runs it as `exec -l <command>`, so it must be one command,
@@ -13,21 +13,17 @@ if [[ $kind == popup ]]; then
   fi
   exec "$@"
 fi
-if [[ $TERM_PROGRAM != ghostty && $kind != window && $kind != shell ]]; then
+if [[ $TERM_PROGRAM != ghostty && $kind != window ]]; then
   exec "$@"
 fi
 osascript - $kind "${(j: :)${(qq)@}}" $PWD "PATH=$PATH" >/dev/null <<'APPLESCRIPT'
 on run {kind, cmd, cwd, pathEnv}
   tell application "Ghostty"
     set cfg to new surface configuration
-    if kind is "shell" then
-      set initial input of cfg to cmd & linefeed
-    else
-      set command of cfg to cmd
-    end if
+    set command of cfg to cmd
     set initial working directory of cfg to cwd
     set environment variables of cfg to {pathEnv}
-    if kind is "window" or kind is "shell" then
+    if kind is "window" then
       new window with configuration cfg
     else if kind is "tab" then
       new tab in front window with configuration cfg

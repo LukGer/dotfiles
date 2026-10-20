@@ -1,6 +1,6 @@
 # ghd: PR dashboard with agent reviews
 
-[gh-dash](https://github.com/dlvhdr/gh-dash) in its own Ghostty window. From
+[gh-dash](https://github.com/dlvhdr/gh-dash) in your current terminal. From
 any PR you can open the diff or full description in a tab, run a Claude or
 Codex review, and turn the findings you tick into a **pending** GitHub review.
 
@@ -14,13 +14,14 @@ popups, menus and pickers, and the `pr-review` skill for reviews.
 ghd
 ```
 
-Opens gh-dash in a new Ghostty window, inside its own tmux server (`-L ghd`)
-with no status bar or personal tmux configuration. Needs Ghostty 1.3+
-(AppleScript), `jq` (ships with macOS), and `gh`, `tmux` 3.3+, `fzf`, `glow`,
-`delta` and the gh-dash extension, which `script/install` provides. The first
-run asks whether your shell may control Ghostty; allow it.
-The dashboard runs as a command in Ghostty's configured shell. Quitting it
-returns to that same shell, preserving your configuration and shell integration.
+Runs gh-dash in the terminal where you invoke it, inside its own tmux server
+(`-L ghd`) with no status bar or personal tmux configuration. Quitting returns
+to your existing shell prompt, preserving your configuration and working directory.
+Needs `jq` (ships with macOS), `gh`, `tmux` 3.3+, `fzf`, `glow`, `delta` and
+the gh-dash extension, which `script/install` provides. Opening diffs and
+descriptions in Ghostty tabs needs Ghostty 1.3+ (AppleScript); the first such
+action asks whether your shell may control Ghostty. In other terminals these
+viewers run in place.
 
 ## Keys
 
@@ -92,7 +93,7 @@ this automatically.
 | File | Role |
 | --- | --- |
 | `bin/ghd` | dispatcher: `ghd <command>` runs `ghd/<command>` |
-| `start`, `tmux.conf` | isolated dashboard session inside Ghostty's configured shell |
+| `start`, `tmux.conf` | isolated dashboard session in the current terminal |
 | `open` | Ghostty tabs and windows via AppleScript; tmux popups |
 | `review` | menu, worktree, agent launch, cleanup |
 | `view` | read a saved review here and optionally post its findings |

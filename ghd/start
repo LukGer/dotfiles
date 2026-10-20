@@ -2,5 +2,5 @@
 # Usage: ghd start
 cd $HOME
 lib=${0:A:h}
-exec $lib/open shell env -u TMUX tmux -L ghd -f $lib/tmux.conf \
-  new-session -A -s ghd -n dashboard env TERM_PROGRAM=ghostty gh dash
+exec env -u TMUX tmux -L ghd -f $lib/tmux.conf \
+  new-session -A -s ghd -n dashboard env "TERM_PROGRAM=$TERM_PROGRAM" gh dash

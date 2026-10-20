@@ -14,16 +14,13 @@ ROOT = Path(__file__).resolve().parent.parent
 def cli(tmp_path):
     stub = tmp_path / "stub"
     stub.write_text("""#!/usr/bin/env python3
-import json, os, pathlib, shlex, subprocess, sys
+import json, os, pathlib, subprocess, sys
 name = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
 with open(os.environ['CALLS'], 'a') as f:
     f.write(json.dumps([name, *args]) + '\\n')
 if name == 'osascript':
     sys.stdin.read()
-    if os.environ.get('LAUNCH_SURFACE'):
-        code = subprocess.call(shlex.split(args[2]))
-        sys.exit(0 if args[1] == 'shell' else code)
 elif name == 'gh':
     print('A review\\tauthor\\t1234567890\\tmain')
 elif name == 'git':
@@ -31,6 +28,8 @@ elif name == 'git':
 elif name == 'fzf':
     print(os.environ.get('MENU_CHOICE', ''))
 elif name == 'tmux':
+    if args[0] == '-L' and os.environ.get('TMUX'):
+        sys.exit(91)
     if os.environ.get('TMUX_FAIL'):
         sys.exit(1)
     child_env = {**os.environ, 'TERM_PROGRAM': 'tmux'}
@@ -103,7 +102,7 @@ def test_picker_keys_open_popups(cli, key):
 
 
 def test_dashboard_starts_in_isolated_tmux_even_from_another_session(cli):
-    result, calls = cli("start", LAUNCH_SURFACE="1")
+    result, calls = cli("start")
     assert result.returncode == 0, result.stderr
     launches = [args for name, *args in calls if name == "tmux"]
     assert len(launches) == 1, calls
@@ -111,16 +110,18 @@ def test_dashboard_starts_in_isolated_tmux_even_from_another_session(cli):
     assert args[:2] == ["-L", "ghd"]
     assert "new-session" in args and "-A" in args
     assert args[-2:] == ["gh", "dash"]
+    assert not any(name == "osascript" for name, *_ in calls)
 
 
-@pytest.mark.parametrize("overrides", [{}, {"TMUX_FAIL": "1"}])
-def test_dashboard_uses_ghosttys_configured_shell(cli, overrides):
-    result, calls = cli("start", LAUNCH_SURFACE="1", **overrides)
-    assert result.returncode == 0, result.stderr
-    surfaces = [args for name, *args in calls if name == "osascript"]
-    assert len(surfaces) == 1, calls
-    assert surfaces[0][1] == "shell"
-    assert shlex.split(surfaces[0][2])[:4] == ["env", "-u", "TMUX", "tmux"]
+@pytest.mark.parametrize("terminal", ["ghostty", "Apple_Terminal"])
+@pytest.mark.parametrize("exit_code", [0, 1])
+def test_dashboard_runs_in_the_calling_terminal(cli, terminal, exit_code):
+    result, calls = cli("start", TERM_PROGRAM=terminal, TMUX_FAIL="1" if exit_code else "")
+    assert result.returncode == exit_code, result.stderr
+    assert len(calls) == 1, calls
+    name, *args = calls[0]
+    assert name == "tmux"
+    assert f"TERM_PROGRAM={terminal}" in args
 
 
 @pytest.mark.parametrize("tool, mode", [("codex", "exec"), ("claude", "-p")])
