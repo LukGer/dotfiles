@@ -9,7 +9,7 @@ argument-hint: "<owner/repo#pr> plus the brief from ghd review"
 
 Review someone else's pull request. You are a reader: the output is two files that the human curates and posts with `ghd post`.
 
-The brief from `ghd review` names the PR, `base`, `merge_base`, `head`, `review_file`, `findings_file` and `tool`. The working directory is a detached worktree at `head`. When `merge_base` is `none` there is no checkout: read the diff with `gh pr diff` and files with `gh api "repos/<repo>/contents/<path>?ref=<head>"`.
+The brief from `ghd review` names the PR, `base`, `merge_base`, `head`, `review_file`, `findings_file`, `check` and `tool`. After an earlier review of the same PR it also names `previous_review`, `previous_findings` and `previous_sha`. The working directory is a detached worktree at `head`. When `merge_base` is `none` there is no checkout: read the diff with `gh pr diff` and files with `gh api "repos/<repo>/contents/<path>?ref=<head>"`.
 
 ## Contract
 
@@ -19,7 +19,7 @@ The brief from `ghd review` names the PR, `base`, `merge_base`, `head`, `review_
 
 ## Step 1 — Gather
 
-Gather once for the pinned window: exact changed paths and line counts, `gh pr view <pr> --repo <repo> --json title,body,headRefName`, and `git log <merge_base>..<head>`. Everything is committed; there is no staged, unstaged, or untracked review window.
+Gather once for the pinned window: exact changed paths and line counts, `gh pr view <pr> --repo <repo> --json title,body,headRefName`, `git log <merge_base>..<head>`, and the review threads already on the PR (`gh api --method GET repos/<repo>/pulls/<pr>/comments --paginate`). A point that already has a thread is not raised again; it goes in the Dropped table as `already on the PR`. Everything is committed; there is no staged, unstaged, or untracked review window.
 
 When `.agents/skills/local-review/SKILL.md` exists, read its roster, exclusions, and Deep trigger, following its pointers for launch criteria. Apply those exclusions before reading the full reviewable diff. Otherwise read the full PR diff. Repository guidelines define what to inspect; this personal skill owns gathering, dispatch, verification, and output instead of running the repository's orchestration steps.
 
@@ -61,6 +61,8 @@ Without `local-review`, make one pass over the gathered diff for bugs and logic 
 
 Make one parent verification pass over the candidates: check the cited behavior and its introduction in the pinned diff, collapse overlapping findings, and retain the strongest supported severity. Use the specialists' evidence and targeted source reads, not a repeat of their investigations. Follow up only on a named unresolved question that could change a finding; a newly discovered material defect still merits verification. Drop unsupported candidates with a short reason. A clean PR is a valid result.
 
+**Re-review.** When the brief names `previous_findings`, read it and `git diff <previous_sha> <head>`. Sort each previous finding into *fixed* (the change addresses it), *open* (unchanged, still a finding), or *dropped* (no longer applies, or a thread on the PR settled it). Open findings not yet on the PR stay in `findings_file`; fixed and dropped ones appear only in the markdown. New findings in code the author did not touch since `previous_sha` are still findings, but say so.
+
 Keep discovered P3s from every specialist without extra nitpick-hunting passes. Completeness rows are ordinary findings in category `completeness`, rather than the repository orchestrator's advisory section. Consolidation is complete when each retained finding has verified evidence, a head anchor, and a final category/severity, with coverage gaps recorded.
 
 Every finding carries two axes:
@@ -95,10 +97,10 @@ Every finding carries two axes:
 }
 ```
 
-**review_file**, markdown: the TLDR, a Findings table (`# | Category | P | Pointer | Comment`, ordered P0 → P3), and a Dropped table of candidates you verified away. Record which specialist passes ran or were skipped and any coverage gaps.
+**review_file**, markdown: the TLDR, a Findings table (`# | Category | P | Pointer | Comment`, ordered P0 → P3), and a Dropped table of candidates you verified away. On a re-review, add a Since-last-review table (`# | Previous finding | Status`). Record which specialist passes ran or were skipped and any coverage gaps.
 
-Write both final files once after consolidation, then check that the findings JSON parses and agrees with the markdown. Correct validation errors if needed. Finish with a short outcome and both file paths; `ghd` opens the saved markdown, so the final reply need not repeat it.
+Write both final files once after consolidation, then run the `check` command from the brief and fix what it reports until it prints `ok`. Then confirm the findings agree with the markdown. Finish with a short outcome and both file paths; `ghd` opens the saved markdown, so the final reply need not repeat it.
 
 ## Follow-ups
 
-When the human asks to save the conversation as an additional review, write a fresh markdown file and findings file (same schema) to temp paths and run `ghd save <repo> <pr> <tool> <markdown> <findings>`. That adds a new review next to the original.
+The human can reopen this conversation from the ghd reader to ask about findings or draft fixes. When they ask to save the conversation as an additional review, write a fresh markdown file and findings file (same schema) to temp paths and run `ghd save <repo> <pr> <tool> <markdown> <findings>`. That adds a new review next to the original.

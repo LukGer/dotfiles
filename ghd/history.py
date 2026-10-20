@@ -41,6 +41,11 @@ def status(meta: dict, cur: tuple[str | None, str | None]) -> str:
     return f"\033[33m{n} new commit{'s' if n != '1' else ''}\033[0m"
 
 
+def duration(meta: dict) -> str:
+    seconds = meta.get("seconds")
+    return f"{seconds // 60}m{seconds % 60:02d}s" if seconds is not None else ""
+
+
 def main(argv: list[str]) -> None:
     only = tuple(argv[:2]) if len(argv) >= 2 else None
     metas = []
@@ -58,7 +63,7 @@ def main(argv: list[str]) -> None:
     with ThreadPoolExecutor(8) as pool:
         cur = dict(zip(keys, pool.map(current, keys)))
         states = list(pool.map(lambda m: status(m, cur[(m["repo"], m["pr"])]), metas))
-    rows = [f"{m['file']}\t{m['at']}  {m['repo']}#{m['pr']}  {m['tool']:16}  {(m.get('title') or '')[:55]:55}  {s}"
+    rows = [f"{m['file']}\t{m['at']}  {m['repo']}#{m['pr']}  {m['tool']:16}  {duration(m):>7}  {(m.get('title') or '')[:55]:55}  {s}"
             for m, s in zip(metas, states)]
 
     picked = subprocess.run(

@@ -38,7 +38,11 @@ bell() {
   fi
 }
 
-fail() { bell; print -u2 "$1"; print -u2 'Press any key...'; read -k 1; exit 1 }
+fail() {
+  bell
+  [[ -n $out && ! -s $out.md ]] && rm -f $out.json
+  print -u2 "$1"; print -u2 'Press any key...'; read -k 1; exit 1
+}
 
 IFS=$'\t' read -r title author head baseRef < <(gh pr view $pr --repo $repo \
   --json title,author,headRefOid,baseRefName -q '[.title, .author.login, .headRefOid, .baseRefName] | @tsv')
@@ -67,8 +71,11 @@ else
   cd $(mktemp -d -t ghd-review)
 fi
 
+session=$(uuidgen | tr A-Z a-z)
+[[ $tool == opencode ]] && session=ses_ghd${session//-/}
 jq -n --arg repo $repo --argjson pr $pr --arg tool $tool --arg sha $head --arg title $title \
-  --arg at "$(date '+%Y-%m-%d %H:%M')" '{repo: $repo, pr: $pr, tool: $tool, sha: $sha, title: $title, at: $at}' > $out.json
+  --arg at "$(date '+%Y-%m-%d %H:%M')" --arg session $session --arg cwd $PWD \
+  '{repo: $repo, pr: $pr, tool: $tool, sha: $sha, title: $title, at: $at, session: $session, cwd: $cwd}' > $out.json
 
 brief="$repo#$pr
 base: $baseRef
@@ -76,22 +83,39 @@ merge_base: ${merge_base:-none, no checkout: read the PR with gh pr diff}
 head: $head
 review_file: $out.md
 findings_file: $out.findings
-tool: $tool
+check: ghd check $out.findings${merge_base:+ --head $head}
+tool: $tool"
+previous=($store/*__${repo//\//_}__${pr}__*.findings(N.On))
+if (( $#previous )); then
+  prev=${previous[1]%.findings}
+  brief+="
+previous_review: $prev.md
+previous_findings: $prev.findings
+previous_sha: $(jq -r .sha $prev.json)"
+fi
+brief+="
 For GitHub API reads, use gh api --method GET <endpoint>."
 
 print '  Reviewing… scroll up for earlier output; q returns to live output. Ctrl+C cancels.'
+SECONDS=0
 case $tool in
   claude)
     permissions=("Edit(/$out.md)" "Edit(/$out.findings)"
       'Bash(gh pr view *)' 'Bash(gh pr diff *)' 'Bash(gh api --method GET *)'
-      'Bash(git diff *)' 'Bash(git log *)' 'Bash(git show *)' 'Bash(git status *)')
-    python3 $lib/noninteractive.py claude -p --model claude-opus-5-5 --setting-sources user --add-dir $store --allowedTools "${(j:,:)permissions}" \
+      'Bash(git diff *)' 'Bash(git log *)' 'Bash(git show *)' 'Bash(git status *)' 'Bash(ghd check *)'
+      mcp__atlassian__getAccessibleAtlassianResources mcp__atlassian__getJiraIssue mcp__atlassian__searchJiraIssuesUsingJql)
+    python3 $lib/noninteractive.py claude -p --model claude-opus-5-5 --setting-sources user --session-id $session \
+      --mcp-config $lib/mcp.json --add-dir $store --allowedTools "${(j:,:)permissions}" \
       -n "#$pr review" "/pr-review $brief" ;;
-  opencode) python3 $lib/noninteractive.py opencode run --model 'openai/gpt-6.1-sol#high' \
-    --title "#$pr review" "Read and follow the pr-review skill at ${lib:h}/ai/skills/pr-review/SKILL.md.
-$brief" ;;
+  opencode) python3 $lib/noninteractive.py opencode run --agent pr-review --model 'openai/gpt-6.1-sol#high' \
+    --session $session --title "#$pr review" "$brief" ;;
   *) fail "Unknown reviewer: $tool" ;;
 esac || fail "$tool review failed."
 [[ -s $out.md && -s $out.findings ]] || fail "$tool did not save the review and findings."
+python3 $lib/check.py $out.findings ${merge_base:+--head $head} || {
+  mv $out.findings $out.findings.invalid
+  fail "$tool saved invalid findings; kept as $out.findings.invalid."
+}
+jq --argjson seconds $SECONDS '. + {seconds: $seconds}' $out.json > $out.json.tmp && mv $out.json.tmp $out.json
 bell
 $lib/view $repo $pr $out.md || fail "The review viewer exited with an error."

@@ -62,12 +62,23 @@ The picker lists GPT-6.1 Sol (high thinking, OpenCode) first and Opus 5.5
    generic pass. Claude starts
    with `--setting-sources user`, so the PR cannot inject hooks or
    permissions. Its headless run preapproves the GitHub reads, git inspection
-    commands and writes to its two output files. OpenCode reads the skill from
-    this dotfiles checkout and uses its configured permissions.
+   commands, `ghd check`, Jira reads and writes to its two output files. Jira
+   comes from the Atlassian MCP server in `ghd/mcp.json`; authorise it once
+   with `claude --mcp-config ~/.dotfiles/ghd/mcp.json` and `/mcp`. OpenCode
+   runs as the `pr-review` agent (`config/opencode/agents/pr-review.md`),
+   which loads the same skill from `~/.agents/skills`.
+   A second review of the same PR also receives the latest saved findings and
+   their commit: the agent reports each earlier finding as fixed, open or
+   dropped, skips points that already have a thread on the PR, and lists only
+   open and new findings for posting.
 3. The agent writes a markdown review and a findings file to
    `~/.local/share/gh-dash-reviews/` (`GHD_STORE` overrides). Each finding has
    a category (`bug`, `security`, `risk`, `quality`, `design`, `completeness`)
-   and a severity (`P0`–`P3`, where `P3` is a nitpick).
+   and a severity (`P0`–`P3`, where `P3` is a nitpick). `ghd check <findings>
+   [--head <sha>]` validates a findings file, including each anchor against
+   the file at `head`; the agent runs it before saving and `ghd review` runs it
+   again, keeping an invalid file aside as `.findings.invalid`. A failed run
+   leaves no metadata behind.
 4. Claude Code and OpenCode run noninteractively in a popup in the dashboard window.
     Typing is hidden and discarded while the agent runs; Ctrl+C cancels.
     Scroll up with the mouse or trackpad to inspect earlier live output without
@@ -77,8 +88,11 @@ The picker lists GPT-6.1 Sol (high thinking, OpenCode) first and Opus 5.5
    in that popup, with keyboard input restored.
    Short reviews show the posting prompt immediately. For longer reviews,
    scroll to the end to advance automatically; `q` also leaves the reader early.
-   Press `p` and enter to choose findings from this exact review, or enter to
-   return to the dashboard. The worktree is removed when the popup closes.
+   Press `p` and enter to choose findings from this exact review, `c` to
+   continue the conversation with the reviewer in its worktree (ask about a
+   finding, have it draft a fix, or save a follow-up with `ghd save`), or
+   enter to return to the dashboard. The worktree is removed when the popup
+   closes, so a review opened later from `E` can no longer be continued.
    Failed runs or missing output pause with
    an error until you press a key. Saved reviews from `E` use the same reader
    and posting prompt.
@@ -116,12 +130,16 @@ this automatically.
 | `open` | Ghostty tabs and windows via AppleScript; tmux popups |
 | `review` | menu, worktree, agent launch, cleanup |
 | `noninteractive.py` | run the agent with stdin closed, suppress typing and restore terminal input |
-| `view` | read a saved review here and optionally post its findings |
+| `view` | read a saved review here, post its findings, or continue its conversation |
+| `check.py` | findings validator shared by the agents and `review`; `test_check.py` covers it |
+| `mcp.json` | Atlassian MCP server for Claude's Jira reads |
+| `config/opencode/agents/pr-review.md` | the OpenCode agent `review` launches |
 | `menu` | compact chooser with number shortcuts and no search input |
 | `post.py` | finding picker and pending-review GraphQL; `test_post.py` covers placement |
-| `history.py`, `save.py` | past reviews; ad-hoc saves |
+| `history.py`, `save.py` | past reviews with their duration; ad-hoc saves |
 | `diff`, `pager`, `info` | diff and description viewers |
 | `config/gh-dash/config.yml` | sections and keys |
+| `install.sh` | links the OpenCode agent on `dot` runs |
 | `test_ui.py` | keybindings, menu actions, popup routing and automatic review completion |
 | `test_menu.py` | real tmux/fzf lifecycle: choose a reviewer, read the result and return here |
 

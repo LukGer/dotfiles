@@ -46,7 +46,7 @@ elif name in ('opencode', 'claude'):
         if line.startswith(('review_file: ', 'findings_file: ')):
             file = pathlib.Path(line.split(': ', 1)[1])
             file.write_text('# REVIEW-READY\\n\\n' + 'Review paragraph.\\n\\n' * int(os.environ['REVIEW_PARAGRAPHS'])
-                            + 'REVIEW-END\\n' if file.suffix == '.md' else '{}')
+                            + 'REVIEW-END\\n' if file.suffix == '.md' else '{"tldr": "stub", "findings": []}')
 elif name == 'glow':
     assert termios.tcgetattr(sys.stdin.fileno())[3] & termios.ECHO, 'input was not restored'
     os.execv(os.environ['REAL_GLOW'], ['glow', *args])

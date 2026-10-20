@@ -46,7 +46,7 @@ elif name in ('opencode', 'claude'):
         for line in args[-1].splitlines():
             for field in ('review_file: ', 'findings_file: '):
                 if line.startswith(field):
-                    pathlib.Path(line[len(field):]).write_text('{}')
+                    pathlib.Path(line[len(field):]).write_text(os.environ.get('FINDINGS', '{"tldr": "stub", "findings": []}'))
 """)
     stub.chmod(0o755)
     for command in ("tmux", "osascript", "fzf", "gh", "git", "opencode", "claude", "glow"):
@@ -140,10 +140,11 @@ def test_review_finishes_without_an_interactive_agent_prompt(cli, tool, mode):
         "openai/gpt-6.1-sol#high" if tool == "opencode" else "claude-opus-5-5"
     )
     if tool == "opencode":
-        assert "pr-review" in args[-1]
+        assert args[args.index("--agent") + 1] == "pr-review"
     else:
-        assert "--allowedTools" in args
+        assert args[args.index("--mcp-config") + 1] == str(ROOT / "ghd/mcp.json")
         allowed = args[args.index("--allowedTools") + 1].split(",")
+        assert "mcp__atlassian__getJiraIssue" in allowed
         output_paths = [line.split(": ", 1)[1] for line in args[-1].splitlines()
                         if line.startswith(("review_file: ", "findings_file: "))]
         assert {rule for rule in allowed if rule.startswith("Edit")} == {
@@ -159,12 +160,35 @@ def test_running_reviewer_cannot_consume_user_input(cli, tool):
     assert [call for call in calls if call[0] == "agent-input"] == [["agent-input", ""]]
 
 
-@pytest.mark.parametrize("overrides", [{"AGENT_FAIL": "1"}, {"MISSING_OUTPUT": "1"}])
-def test_unsuccessful_review_does_not_silently_close(cli, overrides):
+@pytest.mark.parametrize("overrides", [
+    {"AGENT_FAIL": "1"}, {"MISSING_OUTPUT": "1"}, {"FINDINGS": '{"findings": [{"file": 1}]}'},
+])
+def test_unsuccessful_review_does_not_silently_close(cli, tmp_path, overrides):
     result, _ = cli("review", "owner/repo", "42", "opencode", **overrides)
     assert result.returncode != 0
     assert "Press any key" in result.stderr
     assert (result.stdout + result.stderr).count("\a") == 1
+    store = tmp_path / "reviews"
+    assert not [meta for meta in store.glob("*.json") if not meta.with_suffix(".md").exists()], "orphan metadata"
+    assert bool(list(store.glob("*.findings.invalid"))) == ("FINDINGS" in overrides)
+    assert not list(store.glob("*.findings"))
+
+
+@pytest.mark.parametrize("earlier_pr, expected", [(42, True), (99, False)])
+def test_review_brief_points_at_the_previous_review_of_the_same_pr(cli, tmp_path, earlier_pr, expected):
+    store = tmp_path / "reviews"
+    store.mkdir()
+    base = store / f"20200101-000000__owner_repo__{earlier_pr}__codex"
+    base.with_suffix(".json").write_text(json.dumps({
+        "repo": "owner/repo", "pr": earlier_pr, "at": "earlier", "tool": "codex", "sha": "abc1234",
+    }))
+    base.with_suffix(".findings").write_text('{"tldr": "x", "findings": []}')
+    result, calls = cli("review", "owner/repo", "42", "claude")
+    assert result.returncode == 0, result.stderr
+    brief = next(args for name, *args in calls if name == "claude")[-1]
+    assert (f"previous_findings: {base}.findings" in brief) == expected
+    assert ("previous_sha: abc1234" in brief) == expected
+    assert "check: ghd check " in brief
 
 
 @pytest.mark.parametrize("choice, tool", [
@@ -202,6 +226,30 @@ def test_completed_review_opens_its_saved_markdown_before_returning(cli, tool):
     assert len(viewers) == 1, calls
     assert "-p" in viewers[0] and viewers[0][-1] == markdown
     assert result.stdout.count("\a") == 1
+
+
+@pytest.mark.parametrize("tool, pin, resume", [("claude", "--session-id", "--resume"), ("opencode", "--session", "--session")])
+def test_completed_review_can_continue_the_conversation(cli, tool, pin, resume):
+    result, calls = cli("review", "owner/repo", "42", tool, input_text="c\n\n")
+    assert result.returncode == 0, result.stderr
+    review, follow_up = [args for name, *args in calls if name == tool]
+    session = review[review.index(pin) + 1]
+    assert follow_up[:2] == [resume, session]
+    assert not {"-p", "run"} & set(follow_up), "the follow-up is interactive"
+
+
+def test_hand_saved_review_has_no_conversation_to_continue(cli, tmp_path):
+    store = tmp_path / "reviews"
+    store.mkdir()
+    markdown = store / "adhoc.md"
+    markdown.write_text("# Ad-hoc review")
+    markdown.with_suffix(".json").write_text(json.dumps({
+        "repo": "owner/repo", "pr": 42, "at": "earlier", "tool": "opencode (ad-hoc)", "sha": "1234567890",
+    }))
+    result, calls = cli("history", MENU_CHOICE=str(markdown), input_text="c\n\n")
+    assert result.returncode == 0, result.stderr
+    assert "No conversation to continue" in result.stdout
+    assert not any(name in ("claude", "opencode") for name, *_ in calls)
 
 
 def test_completed_review_can_post_its_own_findings_without_reselecting(cli, tmp_path):

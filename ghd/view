@@ -1,10 +1,31 @@
 #!/bin/zsh
 # Usage: ghd view <owner/repo> <pr> <markdown file>
+#
+# Reads a saved review, then offers to post its findings or to continue the
+# conversation with its reviewer while the review's working directory exists.
 lib=${0:A:h}
 repo=$1 pr=$2 file=$3
+meta=${file%.md}.json
+
+continue_review() {
+  local tool=$(jq -r .tool $meta) session=$(jq -r '.session // empty' $meta) cwd=$(jq -r '.cwd // empty' $meta)
+  if [[ -z $session || ! -d $cwd ]]; then
+    print 'No conversation to continue: this review was saved by hand or its worktree is gone.'
+    return
+  fi
+  cd $cwd
+  case $tool in
+    claude) claude --resume $session --setting-sources user --mcp-config $lib/mcp.json --add-dir ${meta:h} ;;
+    opencode) opencode --session $session ;;
+  esac
+}
 
 PAGER='less -RFXE' glow -p -s dark $file || exit 1
-read -r 'action?[p] choose findings to post · [enter] dashboard > '
-if [[ $action == p ]]; then
-  $lib/post.py $repo $pr --review ${file%.md}.findings
-fi
+while read -r 'action?[p] choose findings to post · [c] continue with the reviewer · [enter] dashboard > '; do
+  case $action in
+    p) $lib/post.py $repo $pr --review ${file%.md}.findings ;;
+    c) continue_review ;;
+    *) break ;;
+  esac
+done
+exit 0
