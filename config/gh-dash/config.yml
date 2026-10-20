@@ -1,11 +1,11 @@
 # gh-dash, run by `ghd`. Keys and scripts are explained in ghd/README.md.
 prSections:
-  - title: My PRs - needs approval
-    filters: is:open author:@me -review:approved archived:false
-  - title: My PRs - approved
-    filters: is:open author:@me review:approved archived:false
+  - title: My Open PRs
+    filters: is:open author:@me archived:false
   - title: Review requested
     filters: is:open review-requested:@me archived:false
+  - title: Involved
+    filters: is:open involves:@me -author:@me archived:false
 defaults:
   preview:
     open: true
