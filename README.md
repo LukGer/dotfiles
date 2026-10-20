@@ -90,6 +90,24 @@ Vendoring them into a public repo would republish someone else's work, so
 re-fetches them on a new machine. Only self-authored skills live in
 `ai/skills/`.
 
+Routine `dot` runs restore missing skills and run `skills update -g -y`.
+Installed skills are checked through the CLI; the installer only clones a
+source repository when it needs to restore a missing skill.
+
+For cleanup, run updates interactively so the CLI can ask before removing
+skills deleted upstream:
+
+```sh
+npx -y skills@latest update -g
+```
+
+Updates do not install newly published skills. To discover and install every
+skill from the followed Matt Pocock repository, run:
+
+```sh
+npx -y skills@latest add mattpocock/skills -g -s '*' -a universal -y
+```
+
 ## Notes
 
 - **Node and pnpm** are managed by mise, installed through Homebrew. Global

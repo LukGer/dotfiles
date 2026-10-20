@@ -83,7 +83,10 @@ def key_command(key):
 def test_f_key_opens_a_floating_review_menu(cli):
     command = [arg.replace("{{.RepoName}}", "owner/repo").replace("{{.PrNumber}}", "42")
                for arg in key_command("f")]
-    result, calls = cli(*command[1:])
+    assert command[:3] == ["tmux", "run-shell", "-b"]
+    review_command = shlex.split(command[3])
+    assert review_command == ["ghd", "review", "owner/repo", "42"]
+    result, calls = cli(*review_command[1:])
     assert result.returncode == 0, result.stderr
     menus = [args for name, *args in calls if name == "tmux" and args[0] == "display-popup"]
     assert len(menus) == 1, calls

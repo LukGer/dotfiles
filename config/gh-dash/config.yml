@@ -36,7 +36,7 @@ keybindings:
       command: ghd open popup ghd review {{.RepoName}} {{.PrNumber}} opencode
     - key: f
       name: review menu
-      command: ghd review {{.RepoName}} {{.PrNumber}}
+      command: tmux run-shell -b 'ghd review {{.RepoName}} {{.PrNumber}}'
     - key: E
       name: past reviews
       command: ghd open popup ghd history

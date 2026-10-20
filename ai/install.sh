@@ -54,16 +54,19 @@ for skill in "$DOTFILES"/ai/skills/*/; do
   link "$DOTFILES/ai/skills/$name" "$AGENTS_SKILLS/$name"
 done
 
+# The complete skill lifecycle includes manual maintenance:
 # Third-party skills are synced against their source repos: skills deleted
 # upstream are removed, missing ones restored from the lock file, every skill
 # of a followed repo installed, and the rest updated to their latest revision.
-# Each distinct source repo is shallow-cloned once into a temp dir.
-LOCK="$DOTFILES/ai/skill-lock.json"
-
+# A skill is deprecated when its source repo no longer ships a skill of that
+# name anywhere — a skill that only moved directories is kept.
 # `update` only refreshes skills already in the lock, so skills added upstream
 # never arrive. For repos we follow wholesale, install every skill they ship.
-FOLLOWED_SKILL_REPOS="mattpocock/skills"
+# Routine runs only restore missing skills and update installed ones; pruning
+# and discovering new skills are manual maintenance steps (see README.md).
+LOCK="$DOTFILES/ai/skill-lock.json"
 
+# Each distinct source repo is shallow-cloned once into a temp dir.
 SOURCES=$(mktemp -d)
 # shellcheck disable=SC2064
 trap "rm -rf '$SOURCES'" EXIT
@@ -86,22 +89,6 @@ for name, meta in json.load(open(sys.argv[1]))["skills"].items():
 PY2
 }
 
-# A skill is deprecated when its source repo no longer ships a skill of that
-# name anywhere — a skill that only moved directories is kept.
-prune_skills() {
-  locked_skills | while IFS="$(printf '\t')" read -r name url path; do
-    repo_dir=$(clone_source "$url") || {
-      echo "    failed to clone $url — keeping $name"
-      continue
-    }
-    [ -f "$repo_dir/$path" ] && continue
-    find "$repo_dir" -path "*/$name/SKILL.md" | grep -q . && continue
-    echo "  removing $name (deleted from $url)"
-    npx -y skills@latest remove "$name" -g -y >/dev/null ||
-      echo "    failed to remove $name"
-  done
-}
-
 restore_skills() {
   locked_skills | while IFS="$(printf '\t')" read -r name url path; do
     [ -d "$AGENTS_SKILLS/$name" ] && continue
@@ -120,14 +107,6 @@ restore_skills() {
   done
 }
 
-add_followed_skills() {
-  for repo in $FOLLOWED_SKILL_REPOS; do
-    echo "  installing all skills from $repo"
-    npx -y skills@latest add "$repo" -g -s '*' -a universal -y >/dev/null ||
-      echo "    failed to install skills from $repo"
-  done
-}
-
 # Skills already on disk are left at whatever revision they were first cloned
 # at, so refresh them through the skills.sh CLI. It owns the lock file (the
 # symlink above puts ~/.agents/.skill-lock.json in this repo) and records the
@@ -141,9 +120,7 @@ update_skills() {
 if ! command -v python3 >/dev/null 2>&1 || ! command -v npx >/dev/null 2>&1; then
   echo "  python3 or npx not found — skipping skill sync"
 elif [ -f "$LOCK" ]; then
-  prune_skills
   restore_skills
-  add_followed_skills
   update_skills
 fi
 

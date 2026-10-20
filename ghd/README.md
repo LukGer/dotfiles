@@ -37,6 +37,8 @@ viewers run in place.
 
 gh-dash's own keys still work; `?` lists them. The review menu floats in the
 centre of the dashboard; choose with `1`–`4` or the arrow keys and enter.
+The `f` key launches it through a background tmux job so gh-dash resumes
+rendering behind the popup instead of staying suspended on a blank screen.
 History and posting pickers open in floating popups and close when you are done.
 Escape or `q` cancels the chooser. It uses a modal popup because
 [`tmux display-menu` returns immediately in tmux 3.8](https://github.com/tmux/tmux/blob/3.8/cmd-display-menu.c#L553),
@@ -53,8 +55,11 @@ The picker lists GPT-6.1 Sol (high thinking, OpenCode) first and Opus 5.5
    `~/dev`) and checks its head out into a detached worktree under
    `~/.cache/ghd/`, with git hooks off. No clone means a diff-only review.
 2. Starts the agent there on the `pr-review` skill (`ai/skills/pr-review`). In
-   a repo with a `local-review` skill it runs those specialists against
-   exactly the PR's diff; elsewhere it does one generic pass. Claude starts
+   a repo with a `local-review` skill, this personal orchestrator uses the repo's
+   specialist guidelines and launch conditions against exactly the PR's diff.
+   It gathers shared context once, scopes parallel passes, and consolidates
+   verified findings without changing the repo's skills. Elsewhere it does one
+   generic pass. Claude starts
    with `--setting-sources user`, so the PR cannot inject hooks or
    permissions. Its headless run preapproves the GitHub reads, git inspection
     commands and writes to its two output files. OpenCode reads the skill from
@@ -64,7 +69,10 @@ The picker lists GPT-6.1 Sol (high thinking, OpenCode) first and Opus 5.5
    a category (`bug`, `security`, `risk`, `quality`, `design`, `completeness`)
    and a severity (`P0`–`P3`, where `P3` is a nitpick).
 4. Claude Code and OpenCode run noninteractively in a popup in the dashboard window.
-   Typing is hidden and discarded while the agent runs; Ctrl+C cancels.
+    Typing is hidden and discarded while the agent runs; Ctrl+C cancels.
+    Scroll up with the mouse or trackpad to inspect earlier live output without
+    interrupting the agent; `q` returns to live output. The review has its own
+    tmux scrollback, keeping up to 50,000 lines, removed when the agent exits.
    When both files are saved, a bell sounds and the markdown opens automatically
    in that popup, with keyboard input restored.
    Short reviews show the posting prompt immediately. For longer reviews,

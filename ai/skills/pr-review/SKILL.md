@@ -19,18 +19,49 @@ The brief from `ghd review` names the PR, `base`, `merge_base`, `head`, `review_
 
 ## Step 1 — Gather
 
-Changed files, the full diff, `gh pr view <pr> --repo <repo> --json title,body,headRefName`, and `git log <merge_base>..<head>`. Collect Jira keys (`[A-Z][A-Z0-9]+-\d+`) from the title, branch, body and commits.
+Gather once for the pinned window: exact changed paths and line counts, `gh pr view <pr> --repo <repo> --json title,body,headRefName`, and `git log <merge_base>..<head>`. Everything is committed; there is no staged, unstaged, or untracked review window.
+
+When `.agents/skills/local-review/SKILL.md` exists, read its roster, exclusions, and Deep trigger, following its pointers for launch criteria. Apply those exclusions before reading the full reviewable diff. Otherwise read the full PR diff. Repository guidelines define what to inspect; this personal skill owns gathering, dispatch, verification, and output instead of running the repository's orchestration steps.
+
+Build one shared review packet in context:
+
+- The pinned range, PR purpose, stack-layer boundaries, exact filtered file manifest, and diff.
+- Jira keys (`[A-Z][A-Z0-9]+-\d+`) from the title, branch, body, and commits. Retrieve their relevant requirements once through available read tools; share the ticket content or an explicit access gap.
+- Applicable repository instruction paths and available optional indexes. Check index existence once; share missing indexes as unavailable so specialists use file search instead.
+
+Gathering is complete when the packet identifies the reviewable files, available requirements, and coverage gaps. Share exact paths rather than abbreviated directory descriptions; discover a path with search before reading it.
 
 ## Step 2 — Review
 
-**Specialist mode**, when `.agents/skills/local-review/SKILL.md` exists here: read it and run its Roster, skip list, Deep trigger, fan-out (Step 2) and verify-and-merge (Step 3), with these PR deltas:
+### Specialist mode
 
-- Hand specialists the pinned `<merge_base>..<head>` range. Everything is committed; the worktree is at `head`.
-- Keep P3s from every specialist. They are the nitpicks.
-- Completeness rows are ordinary findings in category `completeness`.
-- Skip its Step 4 and its write rules. Output follows Step 3 below.
+When the repository has `local-review`, select specialists using its roster and launch conditions, including its risk zones and Deep trigger. Launch all in-scope passes in parallel. Each specialist loads its own repository `SKILL.md` and the references it requires; the parent uses those guidelines through their reports rather than loading every specialist's references itself.
 
-**Generic mode**, otherwise: one pass of your own over the diff, hunting bugs and logic errors, security holes, production risk (data loss, migrations, rollout), maintainability (duplication, naming, oversized units) and user-facing design and copy. Verify each candidate against quoted lines before keeping it. A clean PR is a valid result.
+Give each specialist the relevant slice of the shared packet, including exact assigned paths and hunks, ticket content, access/index availability, and these execution rules:
+
+- Use the supplied pinned window and gathered material; expand into callers, tests, and configuration as needed to verify changed behavior. Re-gather only a specifically missing input.
+- Apply the repository specialist's review guidelines and required checklists. This skill replaces its gathering and report destination, not its standards.
+- Keep code and external systems read-only. Return evidence in chat; only the parent writes the two final files.
+- Return verified candidates with category, severity, exact head pointer and anchor, quoted evidence, causal explanation, and any traced caller/customer impact. Include concise reasons for discarded candidates and any coverage gaps.
+
+Set scopes by responsibility:
+
+- **Correctness, security, quality:** cover the filtered window through their respective guidelines.
+- **Deep correctness:** an independent second pass on the exact zone hunks that triggered it; for a size-only trigger, use the largest changed hunks. Trace their dependencies without broadening into a duplicate whole-PR review. Keep this pass independent of the first correctness pass's findings.
+- **Production risk:** changed behavior in every applicable risk zone, traced to reachable operational entry points and affected customers/configuration.
+- **Product design and completeness:** relevant user-facing changes and supplied ticket requirements respectively; retain the repository's launch conditions.
+
+When parallel dispatch is unavailable, run the same scoped passes sequentially using the shared packet. While specialists run, the parent resolves concrete missing inputs rather than starting duplicate review passes. An access gap stays a reported limitation unless new access or evidence becomes available.
+
+### Generic mode
+
+Without `local-review`, make one pass over the gathered diff for bugs and logic errors, security holes, production risk (data loss, migrations, rollout), maintainability (duplication, naming, oversized units), and user-facing design and copy.
+
+### Verify and consolidate
+
+Make one parent verification pass over the candidates: check the cited behavior and its introduction in the pinned diff, collapse overlapping findings, and retain the strongest supported severity. Use the specialists' evidence and targeted source reads, not a repeat of their investigations. Follow up only on a named unresolved question that could change a finding; a newly discovered material defect still merits verification. Drop unsupported candidates with a short reason. A clean PR is a valid result.
+
+Keep discovered P3s from every specialist without extra nitpick-hunting passes. Completeness rows are ordinary findings in category `completeness`, rather than the repository orchestrator's advisory section. Consolidation is complete when each retained finding has verified evidence, a head anchor, and a final category/severity, with coverage gaps recorded.
 
 Every finding carries two axes:
 
@@ -41,7 +72,7 @@ Every finding carries two axes:
 
 **Comment.** Each finding's `comment` is what a human reviewer would post: 1–2 short sentences, about 30 words, problem first and then the fix, naming concrete identifiers. Plain prose, unlabeled: `ghd post` adds the category emoji, `nit:` and the AI suffix.
 
-**Placement.** `line` is the line number in the file at `head`, on a line inside a diff hunk, preferring added lines. `start_line` opens a multi-line range in the same hunk. `anchor` is the exact text of `line`. Read the numbers off the worktree file (`sed -n '<line>p' <file>`) and re-check every finding's anchor before saving.
+**Placement.** `line` is the line number in the file at `head`, on a line inside a diff hunk, preferring added lines. `start_line` opens a multi-line range in the same hunk. `anchor` is the exact text of `line`. Verify the retained findings' anchors and hunk membership together before saving, using the worktree or pinned-head API contents.
 
 **findings_file**, JSON:
 
@@ -64,9 +95,9 @@ Every finding carries two axes:
 }
 ```
 
-**review_file**, markdown: the TLDR, a Findings table (`# | Category | P | Pointer | Comment`, ordered P0 → P3), and a Dropped table of candidates you verified away.
+**review_file**, markdown: the TLDR, a Findings table (`# | Category | P | Pointer | Comment`, ordered P0 → P3), and a Dropped table of candidates you verified away. Record which specialist passes ran or were skipped and any coverage gaps.
 
-Reply with the full review_file content, then name both files.
+Write both final files once after consolidation, then check that the findings JSON parses and agrees with the markdown. Correct validation errors if needed. Finish with a short outcome and both file paths; `ghd` opens the saved markdown, so the final reply need not repeat it.
 
 ## Follow-ups
 

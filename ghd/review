@@ -79,7 +79,7 @@ findings_file: $out.findings
 tool: $tool
 For GitHub API reads, use gh api --method GET <endpoint>."
 
-print '  Reviewing… keyboard input is paused (Ctrl+C cancels).'
+print '  Reviewing… scroll up for earlier output; q returns to live output. Ctrl+C cancels.'
 case $tool in
   claude)
     permissions=("Edit(/$out.md)" "Edit(/$out.findings)"
