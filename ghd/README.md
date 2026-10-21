@@ -91,7 +91,7 @@ The picker lists GPT-6.1 Sol (high thinking, OpenCode) first and Opus 5.5
    Press `p` to choose findings from this exact review, `c` to
    continue the conversation with the reviewer in its worktree (ask about a
    finding, have it draft a fix, or save a follow-up with `ghd save`), or
-   Enter to return to the dashboard. These shortcuts respond immediately,
+   Esc to return to the dashboard. These shortcuts respond immediately,
    without an extra Enter. The worktree is removed when the popup
    closes, so a review opened later from `E` can no longer be continued.
    Failed runs or missing output pause with

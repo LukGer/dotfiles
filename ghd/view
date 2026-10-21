@@ -23,12 +23,12 @@ continue_review() {
 PAGER='less -RFXE' glow -p -s dark $file || exit 1
 read_options=(-r -s -k 1)
 [[ -t 0 ]] || read_options+=(-u 0)
-while read "${read_options[@]}" 'action?[p] choose findings to post · [c] continue with the reviewer · [enter] dashboard > '; do
+while read "${read_options[@]}" 'action?[p] choose findings to post · [c] continue with the reviewer · [esc] dashboard > '; do
   print
   case $action in
     p) $lib/post.py $repo $pr --review ${file%.md}.findings ;;
     c) continue_review ;;
-    $'\n'|$'\r') break ;;
+    $'\e') break ;;
   esac
 done
 exit 0

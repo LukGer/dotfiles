@@ -124,7 +124,7 @@ elif name == 'glow':
             assert b"REVIEW-END" in output, "review text should stay visible before choosing to post"
             assert b"no findings to post" not in output, "queued typing chose to post"
             assert menu.poll() is None, "posting should remain a user choice"
-            os.write(master, b"x")
+            os.write(master, b"x\n")
             os.write(master, action)
             output = b""
             deadline = time.monotonic() + 5
@@ -139,7 +139,7 @@ elif name == 'glow':
                 assert time.monotonic() < deadline, "action did not return to the review prompt"
                 if select.select([master], [], [], .05)[0]:
                     output += os.read(master, 65536)
-            os.write(master, b"\n")
+            os.write(master, b"\x1b")
         stdout, stderr = menu.communicate(timeout=5)
         assert menu.returncode == 0, stderr.decode()
         if tool:
