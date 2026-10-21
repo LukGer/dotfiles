@@ -25,6 +25,9 @@ keybindings:
     - key: k
       builtin: pageUp
   prs:
+    - key: O
+      name: open deployment
+      command: ghd open popup ghd deployment {{.RepoName}} {{.PrNumber}}
     - key: i
       name: full info in new tab
       command: ghd open tab ghd info {{.RepoName}} {{.PrNumber}}

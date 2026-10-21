@@ -1,0 +1,106 @@
+--- a/internal/data/prapi.go
++++ b/internal/data/prapi.go
+@@ -62,6 +62,9 @@
+ 	Reviews            Reviews                    `graphql:"reviews(last: 100)"`
+ 	SuggestedReviewers []SuggestedReviewer
+ 	Files              ChangedFiles `graphql:"files(first: 20)"`
++
++	MergeCommit          *DeployedCommit
++	PotentialMergeCommit *DeployedCommit
+ }
+ 
+ type PullRequestData struct {
+@@ -165,13 +168,31 @@
+ 	} `graphql:"contexts(last: 1)"`
+ }
+ 
++type Deployment struct {
++	Environment  string
++	State        string
++	CreatedAt    time.Time
++	LatestStatus *struct {
++		EnvironmentUrl string
++	}
++}
++
++type DeployedCommit struct {
++	Deployments struct {
++		Nodes []Deployment
++	} `graphql:"deployments(last: 100)"`
++}
++
+ type AllCommits struct {
+ 	Nodes []struct {
+ 		Commit struct {
+ 			AbbreviatedOid  string
+ 			CommittedDate   time.Time
+ 			MessageHeadline string
+-			Author          struct {
++			Deployments     struct {
++				Nodes []Deployment
++			} `graphql:"deployments(last: 100)"`
++			Author struct {
+ 				Name string
+ 				User struct {
+ 					Login string
+--- a/internal/tui/components/prview/prview.go
++++ b/internal/tui/components/prview/prview.go
+@@ -178,6 +178,7 @@
+ 
+ func (m *Model) viewOverviewTab() string {
+ 	body := strings.Builder{}
++	body.WriteString(m.renderDeployments())
+ 	reviewers := m.renderRequestedReviewers()
+ 	if reviewers != "" {
+ 		body.WriteString(reviewers)
+--- /dev/null
++++ b/internal/tui/components/prview/deployments.go
+@@ -0,0 +1,48 @@
++package prview
++
++import (
++	"fmt"
++	"sort"
++	"strings"
++
++	"github.com/dlvhdr/gh-dash/v4/internal/data"
++)
++
++func (m *Model) renderDeployments() string {
++	if !m.pr.Data.IsEnriched {
++		return ""
++	}
++	latest := make(map[string]data.Deployment)
++	deployments := []data.Deployment{}
++	for _, commit := range []*data.DeployedCommit{m.pr.Data.Enriched.MergeCommit, m.pr.Data.Enriched.PotentialMergeCommit} {
++		if commit != nil {
++			deployments = append(deployments, commit.Deployments.Nodes...)
++		}
++	}
++	for _, node := range m.pr.Data.Enriched.AllCommits.Nodes {
++		deployments = append(deployments, node.Commit.Deployments.Nodes...)
++	}
++	for _, deployment := range deployments {
++		previous, exists := latest[deployment.Environment]
++		if !exists || deployment.CreatedAt.After(previous.CreatedAt) {
++			latest[deployment.Environment] = deployment
++		}
++	}
++	if len(latest) == 0 {
++		return m.ctx.Styles.Common.FaintTextStyle.Render("Deployments: none") + "\n\n"
++	}
++	names := make([]string, 0, len(latest))
++	for name := range latest {
++		names = append(names, name)
++	}
++	sort.Strings(names)
++	lines := []string{m.ctx.Styles.Common.MainTextStyle.Underline(true).Render("Deployments · O open")}
++	for _, name := range names {
++		deployment := latest[name]
++		lines = append(lines, fmt.Sprintf("%s · %s", name, deployment.State))
++		if deployment.LatestStatus != nil && deployment.LatestStatus.EnvironmentUrl != "" {
++			lines = append(lines, deployment.LatestStatus.EnvironmentUrl)
++		}
++	}
++	return strings.Join(lines, "\n") + "\n\n"
++}

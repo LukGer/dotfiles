@@ -1,0 +1,32 @@
+#!/bin/sh
+set -eu
+
+lib=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+version=4.26.2
+toolchain=go@1.27.1
+cache=${XDG_CACHE_HOME:-$HOME/.cache}/ghd
+patch_hash=$(shasum -a 256 "$lib/gh-dash.patch" | cut -d ' ' -f 1)
+binary=$cache/gh-dash-$version-$patch_hash
+
+if [ ! -x "$binary" ]; then
+  mkdir -p "$cache"
+  source_dir=$(mktemp -d "$cache/build.XXXXXX")
+  trap 'rm -rf "$source_dir"' EXIT
+  trap 'exit 1' HUP INT TERM
+  echo "Building gh-dash $version with deployment details…"
+  gh api "repos/dlvhdr/gh-dash/tarball/v$version" > "$source_dir/source.tar.gz"
+  tar -xzf "$source_dir/source.tar.gz" --strip-components=1 -C "$source_dir"
+  patch -s -d "$source_dir" -p1 < "$lib/gh-dash.patch"
+  (
+    cd "$source_dir"
+    mise install "$toolchain"
+    mise exec "$toolchain" -- go build -trimpath \
+      -ldflags "-s -w -X github.com/dlvhdr/gh-dash/v4/cmd.Version=$version+deployments" \
+      -o "$source_dir/gh-dash" .
+  )
+  mv "$source_dir/gh-dash" "$binary"
+  rm -rf "$source_dir"
+  trap - EXIT HUP INT TERM
+fi
+
+exec "$binary" "$@"

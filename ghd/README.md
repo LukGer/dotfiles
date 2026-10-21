@@ -18,7 +18,7 @@ Runs gh-dash in the terminal where you invoke it, inside its own tmux server
 (`-L ghd`) with no status bar or personal tmux configuration. Quitting returns
 to your existing shell prompt, preserving your configuration and working directory.
 Needs `jq` (ships with macOS), `gh`, `tmux` 3.3+, `fzf`, `glow`, `delta` and
-the gh-dash extension, which `script/install` provides. Opening diffs and
+`mise`, which `script/install` provides. Opening diffs and
 descriptions in Ghostty tabs needs Ghostty 1.3+ (AppleScript); the first such
 action asks whether your shell may control Ghostty. In other terminals these
 viewers run in place.
@@ -33,6 +33,7 @@ viewers run in place.
 | `ctrl+o` | Post findings as a pending review |
 | `d` / `D` | Diff in a new tab, side by side |
 | `i` | Full PR description in a new tab |
+| `O` | Open the selected PR's active deployment; choose an environment if several exist |
 | `j` / `k` | Scroll the preview pane |
 
 gh-dash's own keys still work; `?` lists them. The review menu floats in the
@@ -44,6 +45,30 @@ Escape or `q` cancels the chooser. It uses a modal popup because
 [`tmux display-menu` returns immediately in tmux 3.8](https://github.com/tmux/tmux/blob/3.8/cmd-display-menu.c#L553),
 allowing gh-dash to repaint over an open native menu.
 To open URLs while tmux captures the mouse, use Cmd+Shift+click in Ghostty.
+
+## Deployments
+
+The selected PR's Overview shows its GitHub deployment environments, latest
+states and URLs, or `Deployments: none`. It reads GitHub's deployments API
+through GraphQL using your existing `gh` authentication, for any repository
+and deployment provider. The sidebar checks the latest 100 PR commits and
+the latest 100 deployments per commit, including the PR's actual or test merge
+commit when GitHub provides one.
+
+Press `O` to open the latest active deployment's environment URL. With multiple
+environments, choose one with `fzf`; Escape returns to the dashboard. The
+command also works as `ghd deployment <owner/repo> <pr>`. It pages through
+all PR commits and identifies deployments serving an earlier commit, including
+when a newer deployment is still building. Missing URLs, inactive deployments
+and API errors stay visible until Enter returns to the dashboard.
+
+Upstream gh-dash has no deployment display setting, so `ghd dash` builds
+v4.26.2 with the small sidebar patch in `gh-dash.patch`. The first launch
+downloads that release and its Go toolchain through `mise`, then caches the
+binary under `${XDG_CACHE_HOME:-~/.cache}/ghd/`. Later launches reuse it;
+changing the patch rebuilds it. The installed `gh dash` extension is independent.
+Quit and restart `ghd` to load dashboard changes. To update the patched version,
+change the release and toolchain in `dash` and rebase `gh-dash.patch`.
 
 ## Reviews
 
@@ -95,8 +120,8 @@ The picker lists GPT-6.1 Sol (high thinking, OpenCode) first and Opus 5.5
     tmux scrollback, keeping up to 50,000 lines, removed when the agent exits.
    When both files are saved, a bell sounds and the markdown opens automatically
    in that popup, with keyboard input restored.
-   Short reviews show the posting prompt immediately. For longer reviews,
-   scroll to the end to advance automatically; `q` also leaves the reader early.
+   Reviews render directly in the popup and show the action prompt immediately,
+   without a pager to quit first.
    Press `p` to choose findings from this exact review, `c` to
    continue the conversation with the reviewer in its worktree (ask about a
    finding, have it draft a fix, or save a follow-up with `ghd save`), or
@@ -137,6 +162,8 @@ this automatically.
 | --- | --- |
 | `bin/ghd` | dispatcher: `ghd <command>` runs `ghd/<command>` |
 | `start`, `tmux.conf` | isolated dashboard session in the current terminal |
+| `dash`, `gh-dash.patch` | cached gh-dash build with GitHub deployment details in the sidebar |
+| `deployment.py`, `test_deployment.py` | open active GitHub environments, with CLI tests for selection and failures |
 | `open` | Ghostty tabs and windows via AppleScript; tmux popups |
 | `review` | menu, worktree, agent launch, cleanup |
 | `noninteractive.py` | run the agent with stdin closed, suppress typing and restore terminal input |

@@ -38,6 +38,8 @@ rule can only produce `~/.foo`, and Ghostty, lsd and gh all keep their
 config under `~/.config`.
 
 Run `dot` any time to pull, update Homebrew and re-run the installers.
+Installed Homebrew packages are left at their current versions; run `dot upgrade`
+to upgrade them too.
 
 ## Topics
 
@@ -59,7 +61,7 @@ Run `dot` any time to pull, update Homebrew and re-run the installers.
 
 | Script | Purpose |
 | --- | --- |
-| `dot` | pull, `brew update`, re-run installers |
+| `dot` | pull, `brew update`, re-run installers; `dot upgrade` also upgrades Homebrew packages |
 | `e` | open a path in the editor (defaults to `.`) |
 | `ghd` | PR dashboard with agent reviews; see [`ghd/README.md`](ghd/README.md) |
 | `git-nuke` | delete a branch locally and on origin; refuses the default branch |

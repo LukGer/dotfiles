@@ -17,8 +17,8 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 
 
-@pytest.mark.skipif(any(not shutil.which(name) for name in ("tmux", "fzf", "glow", "less")),
-                    reason="needs tmux, fzf, glow and less")
+@pytest.mark.skipif(any(not shutil.which(name) for name in ("tmux", "fzf", "glow")),
+                    reason="needs tmux, fzf and glow")
 @pytest.mark.parametrize("key, tool, paragraphs, action, response", [
     (b"\x1b", None, 0, None, None), (b"q", None, 0, None, None),
     (b"1", "opencode", 1, b"p", b"no findings to post"),
@@ -113,12 +113,9 @@ elif name == 'glow':
             assert b"\a" in output, "completion bell did not reach the outer terminal"
             if select.select([master], [], [], .1)[0]:
                 output += os.read(master, 65536)
-            if paragraphs > 1:
-                assert b"choose findings to post" not in output, "long reviews must remain scrollable"
-                os.write(master, b"G")
             deadline = time.monotonic() + 5
             while b"choose findings to post" not in output:
-                assert time.monotonic() < deadline, "reader required quitting before the posting prompt"
+                assert time.monotonic() < deadline, "review required paging or quitting before the posting prompt"
                 if select.select([master], [], [], .05)[0]:
                     output += os.read(master, 65536)
             assert b"REVIEW-END" in output, "review text should stay visible before choosing to post"

@@ -10,11 +10,15 @@
 set -e
 
 DOTFILES="$HOME/.dotfiles"
+export HOMEBREW_BUNDLE_NO_UPGRADE=1
 
 displayUsageAndExit() {
 	echo "dot -- dotfiles management"
 	echo ""
-	echo "Usage: dot [options]"
+	echo "Usage: dot [upgrade] [options]"
+	echo ""
+	echo "Commands:"
+	echo "  upgrade      Upgrade Homebrew packages while running installers"
 	echo ""
 	echo "Options:"
 	echo "  -e, --edit    Open dotfiles directory for editing"
@@ -24,6 +28,9 @@ displayUsageAndExit() {
 
 while test $# -gt 0; do
 	case "$1" in
+		"upgrade")
+			unset HOMEBREW_BUNDLE_NO_UPGRADE
+			;;
 		"-h"|"--help")
 			displayUsageAndExit
 			;;

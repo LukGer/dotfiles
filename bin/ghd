@@ -9,5 +9,5 @@ cmd=${1:-start}
 for f in $lib/$cmd $lib/$cmd.py; do
   [[ -f $f && -x $f ]] && exec $f "$@"
 done
-print -u2 "usage: ghd [start|review|view|post|history|check|info|diff|open|save] ..."
+print -u2 "usage: ghd [start|dash|deployment|review|view|post|history|check|info|diff|open|save] ..."
 exit 1

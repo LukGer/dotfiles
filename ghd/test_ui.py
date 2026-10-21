@@ -120,7 +120,7 @@ def test_dashboard_starts_in_isolated_tmux_even_from_another_session(cli):
     args = launches[0]
     assert args[:2] == ["-L", "ghd"]
     assert "new-session" in args and "-A" in args
-    assert args[-2:] == ["gh", "dash"]
+    assert args[-1] == str(ROOT / "ghd/dash")
     assert not any(name == "osascript" for name, *_ in calls)
 
 
