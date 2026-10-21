@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -13,16 +14,24 @@ def run_with_scrollback():
     with tempfile.TemporaryDirectory(prefix="ghd-review-") as directory:
         result = Path(directory) / "exit-code"
         env["GHD_REVIEW_SCROLLBACK"] = str(result)
+        progress = os.environ.get("GHD_PROGRESS")
         try:
             status = subprocess.call([
                 *tmux, "-f", str(Path(__file__).with_name("tmux.conf")),
                 "new-session", "-s", "review", sys.executable, str(Path(__file__).resolve()), *sys.argv[1:],
+                *(progress_pane(progress) if progress else []),
             ], env=env)
             return int(result.read_text()) if result.exists() else status or 1
         except KeyboardInterrupt:
             return 130
         finally:
             subprocess.run([*tmux, "kill-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def progress_pane(file):
+    watch = [sys.executable, str(Path(__file__).with_name("progress.py")), "watch", file]
+    return [";", "split-window", "-b", "-d", "-l", "3", " ".join(map(shlex.quote, watch)),
+            ";", "set-hook", "-g", "pane-exited", "kill-session"]
 
 
 def main():

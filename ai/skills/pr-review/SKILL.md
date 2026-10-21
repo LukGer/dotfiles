@@ -3,6 +3,16 @@ name: pr-review
 description: Review a GitHub PR into categorised findings that `ghd post` turns into a pending review. Launched by `ghd review`.
 disable-model-invocation: true
 argument-hint: "<owner/repo#pr> plus the brief from ghd review"
+hooks:
+  PreToolUse:
+    - matcher: "Agent|Task"
+      hooks:
+        - type: command
+          command: ghd progress claude
+  PostToolUse:
+    - hooks:
+        - type: command
+          command: ghd progress claude
 ---
 
 # PR review

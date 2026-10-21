@@ -81,6 +81,15 @@ The picker lists GPT-6.1 Sol (high thinking, OpenCode) first and Opus 5.5
    leaves no metadata behind.
 4. Claude Code and OpenCode run noninteractively in a popup in the dashboard window.
     Typing is hidden and discarded while the agent runs; Ctrl+C cancels.
+    Three lines above the agent's output track the review: elapsed time, the
+    phase (gather, review with each specialist pass and whether it finished,
+    verify, write, check), tool calls so far, and which output files exist.
+    The harness reports this, not the agent: Claude Code through `PreToolUse`
+    and `PostToolUse` hooks declared in the skill's frontmatter, OpenCode
+    through the `ghd-progress` plugin (`ghd/progress-plugin.ts`, linked into
+    `~/.config/opencode/plugins/` by `install.sh`), which follows tool calls
+    of `ses_ghd…` sessions and their subagents. Both feed `ghd progress`,
+    which appends to `<review>.progress`.
     Scroll up with the mouse or trackpad to inspect earlier live output without
     interrupting the agent; `q` returns to live output. The review has its own
     tmux scrollback, keeping up to 50,000 lines, removed when the agent exits.
@@ -131,6 +140,7 @@ this automatically.
 | `open` | Ghostty tabs and windows via AppleScript; tmux popups |
 | `review` | menu, worktree, agent launch, cleanup |
 | `noninteractive.py` | run the agent with stdin closed, suppress typing and restore terminal input |
+| `progress.py`, `progress-plugin.ts` | live phase and specialist summary above the agent, from Claude hooks and the OpenCode plugin; `test_progress.py` covers both |
 | `view` | read a saved review here, post its findings, or continue its conversation |
 | `check.py` | findings validator shared by the agents and `review`; `test_check.py` covers it |
 | `mcp.json` | Atlassian MCP server for Claude's Jira reads |
@@ -140,7 +150,7 @@ this automatically.
 | `history.py`, `save.py` | past reviews with their duration; ad-hoc saves |
 | `diff`, `pager`, `info` | diff and description viewers |
 | `config/gh-dash/config.yml` | sections and keys |
-| `install.sh` | links the OpenCode agent on `dot` runs |
+| `install.sh` | links the OpenCode agent and progress plugin on `dot` runs |
 | `test_ui.py` | keybindings, menu actions, popup routing and automatic review completion |
 | `test_menu.py` | real tmux/fzf lifecycle: choose a reviewer, read the result and return here |
 

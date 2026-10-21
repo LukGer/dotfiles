@@ -10,6 +10,7 @@ import subprocess
 import sys
 import termios
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -54,14 +55,7 @@ sys.exit(int(sys.argv[2]))
         os.close(slave)
 
 
-@pytest.mark.skipif(not shutil.which("tmux"), reason="needs tmux")
-@pytest.mark.parametrize("outcome, exit_code", [("success", 0), ("failure", 7), ("interrupt", 130)])
-def test_live_review_can_scroll_without_interrupting_the_agent(tmp_path, outcome, exit_code):
-    socket_file = tmp_path / "socket"
-    release = tmp_path / "release"
-    master, slave = pty.openpty()
-    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 20, 80, 0, 0))
-    agent = """
+LIVE_AGENT = """
 import os, pathlib, sys, time
 assert sys.stdin.read() == ''
 for number in range(200):
@@ -72,20 +66,32 @@ while not pathlib.Path(sys.argv[2]).exists():
     time.sleep(.01)
 sys.exit(int(sys.argv[3]))
 """
-    process = subprocess.Popen(
-        [sys.executable, str(RUNNER), sys.executable, "-c", agent, str(socket_file), str(release), str(exit_code)],
-        stdin=slave, stdout=slave, stderr=slave,
-        env={**os.environ, "TMUX": "/outer-dashboard,1,0", "TERM": "xterm-256color"},
-    )
 
-    def wait_for(predicate):
-        deadline = time.monotonic() + 5
-        while not predicate():
-            assert time.monotonic() < deadline, "live review did not reach the expected state"
-            if select.select([master], [], [], .02)[0]:
-                os.read(master, 65536)
 
-    try:
+@pytest.fixture
+def live_review(tmp_path):
+    """Starts the runner inside a fake dashboard tmux and returns its handles."""
+    socket_file = tmp_path / "socket"
+    release = tmp_path / "release"
+    master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 20, 80, 0, 0))
+    started = []
+
+    def start(exit_code=0, **env):
+        process = subprocess.Popen(
+            [sys.executable, str(RUNNER), sys.executable, "-c", LIVE_AGENT, str(socket_file), str(release), str(exit_code)],
+            stdin=slave, stdout=slave, stderr=slave,
+            env={**os.environ, "TMUX": "/outer-dashboard,1,0", "TERM": "xterm-256color", **env},
+        )
+        started.append(process)
+
+        def wait_for(predicate):
+            deadline = time.monotonic() + 5
+            while not predicate():
+                assert time.monotonic() < deadline, "live review did not reach the expected state"
+                if select.select([master], [], [], .02)[0]:
+                    os.read(master, 65536)
+
         wait_for(socket_file.exists)
         socket = socket_file.read_text()
         assert socket != "/outer-dashboard", "live output has no independent scrollback"
@@ -93,27 +99,52 @@ sys.exit(int(sys.argv[3]))
         def tmux(*args):
             return subprocess.check_output(["tmux", "-S", socket, *args], text=True).strip()
 
-        assert int(tmux("display-message", "-p", "#{history_size}")) > 100
-        os.write(master, b"\x1b[<64;20;10M" * 5)
-        wait_for(lambda: tmux("display-message", "-p", "#{pane_in_mode}") == "1")
-        wait_for(lambda: int(tmux("display-message", "-p", "#{scroll_position}")) > 0)
-        assert process.poll() is None, "scrolling interrupted the agent"
-        os.write(master, b"q")
-        wait_for(lambda: tmux("display-message", "-p", "#{pane_in_mode}") == "0")
-        assert "REVIEW-RUNNING" in tmux("capture-pane", "-p")
-        if outcome == "interrupt":
-            os.write(master, b"\x03")
-        else:
-            release.touch()
-        wait_for(lambda: process.poll() is not None)
-        assert process.returncode == exit_code
-        assert subprocess.run(
-            ["tmux", "-S", socket, "list-sessions"], capture_output=True,
-        ).returncode != 0, "review scrollback server was left running"
-    finally:
-        release.touch()
+        return SimpleNamespace(process=process, master=master, socket=socket, tmux=tmux, wait_for=wait_for, release=release)
+
+    yield start
+    release.touch()
+    for process in started:
         if process.poll() is None:
             process.kill()
             process.wait(timeout=5)
-        os.close(master)
-        os.close(slave)
+    os.close(master)
+    os.close(slave)
+
+
+@pytest.mark.skipif(not shutil.which("tmux"), reason="needs tmux")
+@pytest.mark.parametrize("outcome, exit_code", [("success", 0), ("failure", 7), ("interrupt", 130)])
+def test_live_review_can_scroll_without_interrupting_the_agent(live_review, outcome, exit_code):
+    review = live_review(exit_code)
+    assert int(review.tmux("display-message", "-p", "#{history_size}")) > 100
+    os.write(review.master, b"\x1b[<64;20;10M" * 5)
+    review.wait_for(lambda: review.tmux("display-message", "-p", "#{pane_in_mode}") == "1")
+    review.wait_for(lambda: int(review.tmux("display-message", "-p", "#{scroll_position}")) > 0)
+    assert review.process.poll() is None, "scrolling interrupted the agent"
+    os.write(review.master, b"q")
+    review.wait_for(lambda: review.tmux("display-message", "-p", "#{pane_in_mode}") == "0")
+    assert "REVIEW-RUNNING" in review.tmux("capture-pane", "-p")
+    if outcome == "interrupt":
+        os.write(review.master, b"\x03")
+    else:
+        review.release.touch()
+    review.wait_for(lambda: review.process.poll() is not None)
+    assert review.process.returncode == exit_code
+    assert subprocess.run(
+        ["tmux", "-S", review.socket, "list-sessions"], capture_output=True,
+    ).returncode != 0, "review scrollback server was left running"
+
+
+@pytest.mark.skipif(not shutil.which("tmux"), reason="needs tmux")
+def test_live_review_shows_progress_above_the_agent(live_review, tmp_path):
+    progress = tmp_path / "review.progress"
+    review = live_review(GHD_PROGRESS=str(progress))
+    panes = review.tmux("list-panes", "-F", "#{pane_height} #{pane_active}").splitlines()
+    assert panes[0] == "3 0" and panes[1].endswith(" 1"), panes
+    review.wait_for(lambda: "starting" in review.tmux("capture-pane", "-p", "-t", "0"))
+    progress.write_text('{"session": "s", "kind": "agent_start", "label": "Security"}\n')
+    review.wait_for(lambda: "Security ●" in review.tmux("capture-pane", "-p", "-t", "0"))
+    assert "REVIEW-RUNNING" in review.tmux("capture-pane", "-p", "-t", "1")
+    assert review.process.poll() is None
+    review.release.touch()
+    review.wait_for(lambda: review.process.poll() is not None)
+    assert review.process.returncode == 0, "the progress pane kept the review open after the agent finished"

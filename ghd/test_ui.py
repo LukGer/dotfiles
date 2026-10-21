@@ -40,6 +40,8 @@ elif name == 'tmux':
         (os.environ.get('MENU_CHOICE') and args[args.index('-w') + 1] == '64')):
         sys.exit(subprocess.call(args[-1], shell=True, env=child_env))
 elif name in ('opencode', 'claude'):
+    with open(os.environ['CALLS'], 'a') as f:
+        f.write(json.dumps(['agent-progress', os.environ.get('GHD_PROGRESS', '')]) + '\\n')
     if os.environ.get('CHECK_AGENT_INPUT'):
         with open(os.environ['CALLS'], 'a') as f:
             f.write(json.dumps(['agent-input', sys.stdin.read()]) + '\\n')
@@ -153,6 +155,16 @@ def test_review_finishes_without_an_interactive_agent_prompt(cli, tool, mode):
         assert {rule for rule in allowed if rule.startswith("Edit")} == {
             f"Edit(/{path})" for path in output_paths
         }
+
+
+@pytest.mark.parametrize("tool", ["claude", "opencode"])
+def test_review_progress_is_recorded_next_to_the_review(cli, tool):
+    result, calls = cli("review", "owner/repo", "42", tool)
+    assert result.returncode == 0, result.stderr
+    agent = next(args for name, *args in calls if name == tool)
+    findings = next(line.removeprefix("findings_file: ") for line in agent[-1].splitlines()
+                    if line.startswith("findings_file: "))
+    assert [args for name, *args in calls if name == "agent-progress"] == [[findings.removesuffix(".findings") + ".progress"]]
 
 
 @pytest.mark.parametrize("tool", ["claude", "opencode"])

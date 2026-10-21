@@ -98,6 +98,7 @@ For GitHub API reads, use gh api --method GET <endpoint>."
 
 print '  Reviewing… scroll up for earlier output; q returns to live output. Ctrl+C cancels.'
 SECONDS=0
+export GHD_PROGRESS=$out.progress
 case $tool in
   claude)
     permissions=("Edit(/$out.md)" "Edit(/$out.findings)"
