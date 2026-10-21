@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
 
 import pytest
@@ -22,8 +23,10 @@ with open(os.environ['CALLS'], 'a') as f:
 if name == 'osascript':
     sys.stdin.read()
 elif name == 'gh':
-    print('A review\\tauthor\\t1234567890\\tmain')
+    print('A review\\tauthor\\t' + os.environ.get('PR_HEAD', '1234567890') + '\\tmain')
 elif name == 'git':
+    if os.environ.get('REAL_GIT'):
+        os.execv(os.environ['REAL_GIT'], ['git', *args])
     sys.exit(1)
 elif name == 'fzf':
     print(os.environ.get('MENU_CHOICE', ''))
@@ -172,6 +175,38 @@ def test_unsuccessful_review_does_not_silently_close(cli, tmp_path, overrides):
     assert not [meta for meta in store.glob("*.json") if not meta.with_suffix(".md").exists()], "orphan metadata"
     assert bool(list(store.glob("*.findings.invalid"))) == ("FINDINGS" in overrides)
     assert not list(store.glob("*.findings"))
+
+
+@pytest.mark.parametrize("anchor, valid", [("actual anchor", True), ("wrong anchor", False)])
+def test_checked_out_review_validates_findings_against_the_pr_head(cli, tmp_path, anchor, valid):
+    origin = tmp_path / "owner/repo"
+    origin.mkdir(parents=True)
+
+    def git(*args):
+        return subprocess.check_output(["git", "-C", str(origin), *args], text=True).strip()
+
+    git("init", "-q", "-b", "main")
+    (origin / "a.txt").write_text("actual anchor\n")
+    git("add", "a.txt")
+    git("-c", "user.name=test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false",
+        "-c", "core.hooksPath=/dev/null", "commit", "-qm", "fixture")
+    head = git("rev-parse", "HEAD")
+    git("update-ref", "refs/pull/42/head", head)
+    clones = tmp_path / "clones"
+    subprocess.run(["git", "clone", "-q", str(origin), str(clones / "repo")], check=True)
+    findings = {"tldr": "Review", "findings": [{
+        "file": "a.txt", "line": 1, "anchor": anchor, "category": "bug", "severity": "P1",
+        "title": "Finding", "comment": "Comment.",
+    }]}
+    result, calls = cli("review", "owner/repo", "42", "opencode", input_text="\n",
+                        REAL_GIT=shutil.which("git"), PR_HEAD=head, HOME=str(tmp_path),
+                        FINDINGS=json.dumps(findings))
+    assert "unrecognized arguments" not in result.stderr
+    assert (result.returncode == 0) == valid, result.stderr
+    assert any(name == "glow" for name, *_ in calls) == valid
+    assert bool(list((tmp_path / "reviews").glob("*.findings.invalid"))) == (not valid)
+    if not valid:
+        assert "anchor does not match a.txt:1" in result.stdout
 
 
 @pytest.mark.parametrize("earlier_pr, expected", [(42, True), (99, False)])

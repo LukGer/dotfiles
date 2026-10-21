@@ -88,10 +88,11 @@ The picker lists GPT-6.1 Sol (high thinking, OpenCode) first and Opus 5.5
    in that popup, with keyboard input restored.
    Short reviews show the posting prompt immediately. For longer reviews,
    scroll to the end to advance automatically; `q` also leaves the reader early.
-   Press `p` and enter to choose findings from this exact review, `c` to
+   Press `p` to choose findings from this exact review, `c` to
    continue the conversation with the reviewer in its worktree (ask about a
    finding, have it draft a fix, or save a follow-up with `ghd save`), or
-   enter to return to the dashboard. The worktree is removed when the popup
+   Enter to return to the dashboard. These shortcuts respond immediately,
+   without an extra Enter. The worktree is removed when the popup
    closes, so a review opened later from `E` can no longer be continued.
    Failed runs or missing output pause with
    an error until you press a key. Saved reviews from `E` use the same reader

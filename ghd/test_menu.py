@@ -19,10 +19,12 @@ ROOT = Path(__file__).resolve().parent.parent
 
 @pytest.mark.skipif(any(not shutil.which(name) for name in ("tmux", "fzf", "glow", "less")),
                     reason="needs tmux, fzf, glow and less")
-@pytest.mark.parametrize("key, tool, paragraphs", [
-    (b"\x1b", None, 0), (b"q", None, 0), (b"1", "opencode", 1), (b"2", "claude", 80),
+@pytest.mark.parametrize("key, tool, paragraphs, action, response", [
+    (b"\x1b", None, 0, None, None), (b"q", None, 0, None, None),
+    (b"1", "opencode", 1, b"p", b"no findings to post"),
+    (b"2", "claude", 80, b"c", b"CONVERSATION-READY"),
 ])
-def test_review_menu_waits_for_selection_before_returning_to_dashboard(tmp_path, key, tool, paragraphs):
+def test_review_menu_waits_for_selection_before_returning_to_dashboard(tmp_path, key, tool, paragraphs, action, response):
     tmux = ["tmux", "-L", f"ghd-test-{uuid.uuid4().hex}"]
     record = tmp_path / "calls.jsonl"
     stub = tmp_path / "stub"
@@ -37,6 +39,9 @@ if name == 'gh':
 elif name == 'git':
     sys.exit(1)
 elif name in ('opencode', 'claude'):
+    if args[0] in ('--session', '--resume'):
+        print('CONVERSATION-READY', flush=True)
+        sys.exit(0)
     print('REVIEW-RUNNING', flush=True)
     deadline = time.monotonic() + 5
     while not pathlib.Path(os.environ['RELEASE_AGENT']).exists():
@@ -119,6 +124,21 @@ elif name == 'glow':
             assert b"REVIEW-END" in output, "review text should stay visible before choosing to post"
             assert b"no findings to post" not in output, "queued typing chose to post"
             assert menu.poll() is None, "posting should remain a user choice"
+            os.write(master, b"x")
+            os.write(master, action)
+            output = b""
+            deadline = time.monotonic() + 5
+            while response not in output:
+                assert time.monotonic() < deadline, "action required Enter after its shortcut"
+                if select.select([master], [], [], .05)[0]:
+                    output += os.read(master, 65536)
+            if action == b"p":
+                os.write(master, b"\n")
+                output = b""
+            while b"choose findings to post" not in output:
+                assert time.monotonic() < deadline, "action did not return to the review prompt"
+                if select.select([master], [], [], .05)[0]:
+                    output += os.read(master, 65536)
             os.write(master, b"\n")
         stdout, stderr = menu.communicate(timeout=5)
         assert menu.returncode == 0, stderr.decode()

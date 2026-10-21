@@ -112,7 +112,9 @@ case $tool in
   *) fail "Unknown reviewer: $tool" ;;
 esac || fail "$tool review failed."
 [[ -s $out.md && -s $out.findings ]] || fail "$tool did not save the review and findings."
-python3 $lib/check.py $out.findings ${merge_base:+--head $head} || {
+check_args=($out.findings)
+[[ -n $merge_base ]] && check_args+=(--head $head)
+python3 $lib/check.py "${check_args[@]}" || {
   mv $out.findings $out.findings.invalid
   fail "$tool saved invalid findings; kept as $out.findings.invalid."
 }
