@@ -47,6 +47,14 @@ elif name in ('opencode', 'claude'):
             f.write(json.dumps(['agent-input', sys.stdin.read()]) + '\\n')
     if os.environ.get('AGENT_FAIL'):
         sys.exit(1)
+    if name == 'claude' and os.environ.get('CLAUDE_EVENTS'):
+        events = json.loads(os.environ['CLAUDE_EVENTS'])
+        if '--output-format' in args and args[args.index('--output-format') + 1] == 'stream-json':
+            assert '--verbose' in args and '--include-partial-messages' in args
+            for event in events:
+                print(json.dumps(event), flush=True)
+        else:
+            print(events[-1]['result'])
     if not os.environ.get('MISSING_OUTPUT'):
         for line in args[-1].splitlines():
             for field in ('review_file: ', 'findings_file: '):
@@ -155,6 +163,27 @@ def test_review_finishes_without_an_interactive_agent_prompt(cli, tool, mode):
         assert {rule for rule in allowed if rule.startswith("Edit")} == {
             f"Edit(/{path})" for path in output_paths
         }
+
+
+def test_claude_review_displays_interim_text_and_tool_calls(cli):
+    events = [
+        {"type": "system", "subtype": "init", "session_id": "internal-session"},
+        {"type": "stream_event", "event": {"type": "content_block_delta", "delta": {
+            "type": "text_delta", "text": "Inspecting the diff."}}},
+        {"type": "assistant", "message": {"content": [
+            {"type": "text", "text": "Inspecting the diff."},
+            {"type": "tool_use", "name": "Bash", "input": {"description": "Read PR diff", "command": "git diff"}},
+        ]}},
+        {"type": "stream_event", "event": {"type": "content_block_delta", "delta": {
+            "type": "text_delta", "text": "Review saved."}}},
+        {"type": "result", "is_error": False, "result": "Review saved."},
+    ]
+    result, _ = cli("review", "owner/repo", "42", "claude", CLAUDE_EVENTS=json.dumps(events))
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.count("Inspecting the diff.") == 1
+    assert "Bash: Read PR diff" in result.stdout
+    assert result.stdout.count("Review saved.") == 1
+    assert "internal-session" not in result.stdout
 
 
 @pytest.mark.parametrize("tool", ["claude", "opencode"])

@@ -106,6 +106,9 @@ The picker lists GPT-6.1 Sol (high thinking, OpenCode) first and Opus 5.5
    leaves no metadata behind.
 4. Claude Code and OpenCode run noninteractively in a popup in the dashboard window.
     Typing is hidden and discarded while the agent runs; Ctrl+C cancels.
+    Claude's text streams as it is generated, with a summary of each tool call.
+    `claude.py` renders its `stream-json` events; plain `claude -p` only prints
+    the final response, leaving the live output blank during tool calls.
     Three lines above the agent's output track the review: elapsed time, the
     phase (gather, review with each specialist pass and whether it finished,
     verify, write, check), tool calls so far, and which output files exist.
@@ -167,6 +170,7 @@ this automatically.
 | `open` | Ghostty tabs and windows via AppleScript; tmux popups |
 | `review` | menu, worktree, agent launch, cleanup |
 | `noninteractive.py` | run the agent with stdin closed, suppress typing and restore terminal input |
+| `claude.py` | render Claude's streaming text and tool calls while preserving its exit status |
 | `progress.py`, `progress-plugin.ts` | live phase and specialist summary above the agent, from Claude hooks and the OpenCode plugin; `test_progress.py` covers both |
 | `view` | read a saved review here, post its findings, or continue its conversation |
 | `check.py` | findings validator shared by the agents and `review`; `test_check.py` covers it |
