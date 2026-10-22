@@ -13,7 +13,7 @@ if [ ! -x "$binary" ]; then
   source_dir=$(mktemp -d "$cache/build.XXXXXX")
   trap 'rm -rf "$source_dir"' EXIT
   trap 'exit 1' HUP INT TERM
-  echo "Building gh-dash $version with deployment details…"
+  echo "Building gh-dash $version with PR stacks and deployment details…"
   gh api "repos/dlvhdr/gh-dash/tarball/v$version" > "$source_dir/source.tar.gz"
   tar -xzf "$source_dir/source.tar.gz" --strip-components=1 -C "$source_dir"
   patch -s -d "$source_dir" -p1 < "$lib/gh-dash.patch"
@@ -21,7 +21,7 @@ if [ ! -x "$binary" ]; then
     cd "$source_dir"
     mise install "$toolchain"
     mise exec "$toolchain" -- go build -trimpath \
-      -ldflags "-s -w -X github.com/dlvhdr/gh-dash/v4/cmd.Version=$version+deployments" \
+      -ldflags "-s -w -X github.com/dlvhdr/gh-dash/v4/cmd.Version=$version+stacks-deployments" \
       -o "$source_dir/gh-dash" .
   )
   mv "$source_dir/gh-dash" "$binary"

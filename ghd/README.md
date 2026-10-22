@@ -46,6 +46,18 @@ Escape or `q` cancels the chooser. It uses a modal popup because
 allowing gh-dash to repaint over an open native menu.
 To open URLs while tmux captures the mouse, use Cmd+Shift+click in Ghostty.
 
+## PR stacks
+
+PRs loaded in the same tab are grouped by their base and head branches, with
+the base PR first and dependent PRs below it. The group stays where its first
+member appeared in the search results. A `┌` / `├` / `└` marker connects the
+rows; every PR keeps its own checks, selection and actions.
+
+Grouping uses GitHub branch relationships, so it works without local clones or
+stack-tool metadata. It only groups loaded PRs: filters and pagination can hide
+other members of a stack. Branch names in different repositories or forks do
+not create a group.
+
 ## Deployments
 
 The selected PR's Overview shows its GitHub deployment environments, latest
@@ -62,8 +74,8 @@ all PR commits and identifies deployments serving an earlier commit, including
 when a newer deployment is still building. Missing URLs, inactive deployments
 and API errors stay visible until Enter returns to the dashboard.
 
-Upstream gh-dash has no deployment display setting, so `ghd dash` builds
-v4.26.2 with the small sidebar patch in `gh-dash.patch`. The first launch
+`ghd dash` builds gh-dash v4.26.2 with stack grouping and deployment details
+from `gh-dash.patch`. The first launch
 downloads that release and its Go toolchain through `mise`, then caches the
 binary under `${XDG_CACHE_HOME:-~/.cache}/ghd/`. Later launches reuse it;
 changing the patch rebuilds it. The installed `gh dash` extension is independent.
@@ -165,7 +177,7 @@ this automatically.
 | --- | --- |
 | `bin/ghd` | dispatcher: `ghd <command>` runs `ghd/<command>` |
 | `start`, `tmux.conf` | isolated dashboard session in the current terminal |
-| `dash`, `gh-dash.patch` | cached gh-dash build with GitHub deployment details in the sidebar |
+| `dash`, `gh-dash.patch` | cached gh-dash build with PR stack grouping and deployment details |
 | `deployment.py`, `test_deployment.py` | open active GitHub environments, with CLI tests for selection and failures |
 | `open` | Ghostty tabs and windows via AppleScript; tmux popups |
 | `review` | menu, worktree, agent launch, cleanup |
@@ -186,3 +198,15 @@ this automatically.
 | `test_menu.py` | real tmux/fzf lifecycle: choose a reviewer, read the result and return here |
 
 Tests: `uv run --with pytest pytest ghd`.
+
+The stack regression tests are included in `gh-dash.patch`. From the dotfiles
+root, apply it to a clean release and run gh-dash's Go tests:
+
+```sh
+dotfiles_root=$PWD
+dash_source=$(mktemp -d)
+gh api repos/dlvhdr/gh-dash/tarball/v4.26.2 | tar -xz --strip-components=1 -C "$dash_source"
+patch -s -d "$dash_source" -p1 < "$dotfiles_root/ghd/gh-dash.patch"
+(cd "$dash_source" && mise exec go@1.27.1 -- go test ./internal/...)
+rm -rf "$dash_source"
+```

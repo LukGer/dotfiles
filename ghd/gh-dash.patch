@@ -1,6 +1,17 @@
+diff --git a/internal/data/prapi.go b/internal/data/prapi.go
 --- a/internal/data/prapi.go
 +++ b/internal/data/prapi.go
-@@ -62,6 +62,9 @@
+@@ -46,7 +46,8 @@
+ 	HeadRefName       string
+ 	BaseRefName       string
+ 	HeadRepository    struct {
+-		Name string
++		Name          string
++		NameWithOwner string
+ 	}
+ 	HeadRef struct {
+ 		Name string
+@@ -62,6 +63,9 @@
  	Reviews            Reviews                    `graphql:"reviews(last: 100)"`
  	SuggestedReviewers []SuggestedReviewer
  	Files              ChangedFiles `graphql:"files(first: 20)"`
@@ -10,7 +21,17 @@
  }
  
  type PullRequestData struct {
-@@ -165,13 +168,31 @@
+@@ -82,7 +86,8 @@
+ 	HeadRefName       string
+ 	BaseRefName       string
+ 	HeadRepository    struct {
+-		Name string
++		Name          string
++		NameWithOwner string
+ 	}
+ 	HeadRef struct {
+ 		Name string
+@@ -165,13 +170,31 @@
  	} `graphql:"contexts(last: 1)"`
  }
  
@@ -43,6 +64,350 @@
  				Name string
  				User struct {
  					Login string
+diff --git a/internal/tui/components/prrow/data.go b/internal/tui/components/prrow/data.go
+--- a/internal/tui/components/prrow/data.go
++++ b/internal/tui/components/prrow/data.go
+@@ -7,9 +7,10 @@
+ )
+ 
+ type Data struct {
+-	Primary    *data.PullRequestData
+-	Enriched   data.EnrichedPullRequestData
+-	IsEnriched bool
++	Primary     *data.PullRequestData
++	Enriched    data.EnrichedPullRequestData
++	IsEnriched  bool
++	StackPrefix string
+ }
+ 
+ func (data Data) GetTitle() string {
+diff --git a/internal/tui/components/prrow/prrow.go b/internal/tui/components/prrow/prrow.go
+--- a/internal/tui/components/prrow/prrow.go
++++ b/internal/tui/components/prrow/prrow.go
+@@ -178,7 +178,7 @@
+ }
+ 
+ func (pr *PullRequest) renderTitle() string {
+-	return components.RenderIssueTitle(
++	return pr.Data.StackPrefix + components.RenderIssueTitle(
+ 		pr.Ctx,
+ 		pr.Data.Primary.State,
+ 		pr.Data.Primary.Title,
+@@ -203,6 +203,14 @@
+ 		top = lipgloss.JoinHorizontal(lipgloss.Top, top, baseStyle.Render(" · "), branch)
+ 	}
+ 	title := pr.Data.Primary.Title
++	if prefix := pr.Data.StackPrefix; prefix != "" {
++		top = prefix + top
++		continuation := "│ "
++		if prefix == "└ " {
++			continuation = "  "
++		}
++		title = continuation + title
++	}
+ 	var titleColumn table.Column
+ 	for _, column := range pr.Columns {
+ 		if column.Grow != nil && *column.Grow {
+diff --git a/internal/tui/components/prssection/prssection.go b/internal/tui/components/prssection/prssection.go
+--- a/internal/tui/components/prssection/prssection.go
++++ b/internal/tui/components/prssection/prssection.go
+@@ -200,15 +200,31 @@
+ 
+ 	case SectionPullRequestsFetchedMsg:
+ 		if m.LastFetch.TaskId == msg.TaskId {
++			selected := m.GetCurrRow()
+ 			if m.PageInfo != nil {
+ 				m.Prs = append(m.Prs, msg.Prs...)
+ 			} else {
+ 				m.Prs = msg.Prs
+ 			}
++			m.Prs = groupStacks(m.Prs)
+ 			m.TotalCount = msg.TotalCount
+ 			m.PageInfo = &msg.PageInfo
+ 			m.SetIsLoading(false)
+ 			m.Table.SetRows(m.BuildRows())
++			if selected != nil {
++				for i, pr := range m.Prs {
++					if pr.GetUrl() != selected.GetUrl() {
++						continue
++					}
++					for m.Table.GetCurrItem() < i {
++						m.Table.NextItem()
++					}
++					for m.Table.GetCurrItem() > i {
++						m.Table.PrevItem()
++					}
++					break
++				}
++			}
+ 			m.Table.SetLastUpdated(time.Now())
+ 			m.UpdateTotalItemsCount(m.TotalCount)
+ 		}
+diff --git a/internal/tui/components/prssection/stacks.go b/internal/tui/components/prssection/stacks.go
+new file mode 100644
+--- /dev/null
++++ b/internal/tui/components/prssection/stacks.go
+@@ -0,0 +1,73 @@
++package prssection
++
++import "github.com/dlvhdr/gh-dash/v4/internal/tui/components/prrow"
++
++func groupStacks(prs []prrow.Data) []prrow.Data {
++	parents := make([]int, len(prs))
++	children := make([][]int, len(prs))
++	for i := range parents {
++		parents[i] = -1
++		prs[i].StackPrefix = ""
++	}
++	for i, child := range prs {
++		if child.Primary.State != "OPEN" || child.Primary.BaseRefName == "" {
++			continue
++		}
++		parent := -1
++		for j, candidate := range prs {
++			if i == j || candidate.Primary.State != "OPEN" ||
++				candidate.Primary.Repository.NameWithOwner != child.Primary.Repository.NameWithOwner ||
++				candidate.Primary.HeadRefName != child.Primary.BaseRefName ||
++				candidate.Primary.HeadRepository.NameWithOwner == "" ||
++				candidate.Primary.HeadRepository.NameWithOwner != child.Primary.Repository.NameWithOwner {
++				continue
++			}
++			if parent != -1 {
++				parent = -1
++				break
++			}
++			parent = j
++		}
++		for ancestor := parent; ancestor != -1; ancestor = parents[ancestor] {
++			if ancestor == i {
++				parent = -1
++				break
++			}
++		}
++		parents[i] = parent
++	}
++	for i, parent := range parents {
++		if parent != -1 {
++			children[parent] = append(children[parent], i)
++		}
++	}
++	grouped := make([]prrow.Data, 0, len(prs))
++	visited := make([]bool, len(prs))
++	var appendTree func(int)
++	appendTree = func(i int) {
++		visited[i] = true
++		grouped = append(grouped, prs[i])
++		for _, child := range children[i] {
++			appendTree(child)
++		}
++	}
++	for i := range prs {
++		root := i
++		for parents[root] != -1 {
++			root = parents[root]
++		}
++		if visited[root] {
++			continue
++		}
++		start := len(grouped)
++		appendTree(root)
++		if len(grouped)-start > 1 {
++			for j := start; j < len(grouped); j++ {
++				grouped[j].StackPrefix = "├ "
++			}
++			grouped[start].StackPrefix = "┌ "
++			grouped[len(grouped)-1].StackPrefix = "└ "
++		}
++	}
++	return grouped
++}
+diff --git a/internal/tui/components/prssection/stacks_test.go b/internal/tui/components/prssection/stacks_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/tui/components/prssection/stacks_test.go
+@@ -0,0 +1,181 @@
++package prssection
++
++import (
++	"fmt"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/charmbracelet/x/ansi"
++	"github.com/stretchr/testify/require"
++
++	"github.com/dlvhdr/gh-dash/v4/internal/config"
++	"github.com/dlvhdr/gh-dash/v4/internal/data"
++	"github.com/dlvhdr/gh-dash/v4/internal/tui/components/prrow"
++	"github.com/dlvhdr/gh-dash/v4/internal/tui/context"
++	"github.com/dlvhdr/gh-dash/v4/internal/tui/theme"
++)
++
++func stackPR(number int, base, head string) prrow.Data {
++	pr := &data.PullRequestData{
++		Number: number, Title: fmt.Sprintf("Change %d", number), State: "OPEN",
++		BaseRefName: base, HeadRefName: head,
++		Url:        fmt.Sprintf("https://github.com/owner/repo/pull/%d", number),
++		Repository: data.Repository{Name: "repo", NameWithOwner: "owner/repo"},
++	}
++	pr.HeadRepository.Name = "repo"
++	pr.HeadRepository.NameWithOwner = "owner/repo"
++	return prrow.Data{Primary: pr}
++}
++
++func stackList(t *testing.T, compact bool) Model {
++	t.Helper()
++	cfg, err := config.ParseConfig(config.Location{
++		ConfigFlag: "../../../config/testdata/test-config.yml", SkipGlobalConfig: true,
++	})
++	require.NoError(t, err)
++	cfg.Theme.Ui.Table.Compact = compact
++	thm := theme.ParseTheme(&cfg)
++	ctx := &context.ProgramContext{
++		Config: &cfg, Theme: thm, Styles: context.InitStyles(thm),
++		MainContentWidth: 160, MainContentHeight: 40,
++	}
++	m := NewModel(0, ctx, config.PrsSectionConfig{}, time.Now(), time.Now())
++	m.UpdateProgramContext(ctx)
++	return m
++}
++
++func receiveStackPage(m *Model, prs ...prrow.Data) {
++	m.LastFetch.TaskId = "stacks"
++	m.Update(SectionPullRequestsFetchedMsg{
++		TaskId: "stacks", Prs: prs, TotalCount: m.NumRows() + len(prs),
++		PageInfo: data.PageInfo{HasNextPage: true},
++	})
++}
++
++func TestFetchedPRsGroupStacksInDependencyOrder(t *testing.T) {
++	for _, compact := range []bool{false, true} {
++		t.Run(fmt.Sprintf("compact=%t", compact), func(t *testing.T) {
++			m := stackList(t, compact)
++			receiveStackPage(&m,
++				stackPR(14595, "develop", "labels"),
++				stackPR(14651, "develop", "leaderboards"),
++				stackPR(14614, "dry-run", "live"),
++				stackPR(14593, "labels", "dry-run"),
++			)
++			var numbers []int
++			for range m.NumRows() {
++				numbers = append(numbers, m.GetCurrRow().GetNumber())
++				m.NextRow()
++			}
++			require.Equal(t, []int{14595, 14593, 14614, 14651}, numbers)
++			titleColumn := 1
++			if compact {
++				titleColumn = 2
++			}
++			for i, prefix := range []string{"┌ ", "├ ", "└ ", ""} {
++				row := ansi.Strip(m.BuildRows()[i][titleColumn])
++				require.True(t, strings.HasPrefix(row, prefix), "row %d: %q", i, row)
++				if !compact {
++					continuation := []string{"│ ", "│ ", "  ", "Change"}[i]
++					require.True(t, strings.HasPrefix(strings.Split(row, "\n")[1], continuation), "row %d: %q", i, row)
++				}
++			}
++		})
++	}
++}
++
++func TestStackGroupsKeepSearchOrderAndEveryLoadedPR(t *testing.T) {
++	base := stackPR(1, "main", "base")
++	tip := stackPR(2, "base", "tip")
++	other := stackPR(9, "main", "other")
++	secondBase := stackPR(4, "main", "second")
++	secondTip := stackPR(5, "second", "second-tip")
++	for _, tc := range []struct {
++		name string
++		prs  []prrow.Data
++		want []int
++	}{
++		{"empty", nil, []int{}},
++		{"unrelated", []prrow.Data{other, base}, []int{9, 1}},
++		{"parent loaded last", []prrow.Data{tip, other, base}, []int{1, 2, 9}},
++		{"group after unrelated PR", []prrow.Data{other, tip, base}, []int{9, 1, 2}},
++		{"two interleaved stacks", []prrow.Data{tip, secondBase, base, secondTip, other}, []int{1, 2, 4, 5, 9}},
++		{"branching", []prrow.Data{base, tip, stackPR(3, "base", "sibling"), stackPR(6, "tip", "top")}, []int{1, 2, 6, 3}},
++		{"ambiguous parent", []prrow.Data{tip, base, stackPR(3, "main", "base")}, []int{2, 1, 3}},
++		{"cyclic branches", []prrow.Data{stackPR(1, "tip", "base"), tip}, []int{2, 1}},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			m := stackList(t, false)
++			receiveStackPage(&m, tc.prs...)
++			numbers := []int{}
++			for range m.NumRows() {
++				numbers = append(numbers, m.GetCurrRow().GetNumber())
++				m.NextRow()
++			}
++			require.Equal(t, tc.want, numbers)
++			require.Equal(t, len(tc.prs), len(m.BuildRows()))
++		})
++	}
++}
++
++func TestRefreshRemovesMarkersWhenOnlyOneStackMemberRemains(t *testing.T) {
++	m := stackList(t, false)
++	receiveStackPage(&m, stackPR(1, "main", "base"), stackPR(2, "base", "tip"))
++	m.ResetRows()
++	m.PageInfo = nil
++	receiveStackPage(&m, stackPR(2, "base", "tip"))
++	require.Equal(t, 1, m.NumRows())
++	row := ansi.Strip(m.BuildRows()[0][1])
++	require.NotContains(t, row, "┌")
++	require.NotContains(t, row, "└")
++	require.NotContains(t, row, "│")
++}
++
++func TestLoadingStackMembersKeepsTheSelectedPR(t *testing.T) {
++	for _, tc := range []struct {
++		name     string
++		initial  []prrow.Data
++		next     prrow.Data
++		selected int
++	}{
++		{"parent arrives", []prrow.Data{stackPR(3, "base", "tip"), stackPR(9, "main", "other")}, stackPR(1, "main", "base"), 0},
++		{"child arrives before selection", []prrow.Data{stackPR(1, "main", "base"), stackPR(9, "main", "other")}, stackPR(3, "base", "tip"), 1},
++		{"parent arrives before selection", []prrow.Data{stackPR(3, "base", "tip"), stackPR(9, "main", "other")}, stackPR(1, "main", "base"), 1},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			m := stackList(t, false)
++			receiveStackPage(&m, tc.initial...)
++			for range tc.selected {
++				m.NextRow()
++			}
++			selected := m.GetCurrRow().GetUrl()
++			receiveStackPage(&m, tc.next)
++			require.Equal(t, selected, m.GetCurrRow().GetUrl())
++		})
++	}
++}
++
++func TestUnrelatedBranchesDoNotFormStacks(t *testing.T) {
++	for _, tc := range []struct {
++		name   string
++		change func(*data.PullRequestData)
++	}{
++		{"different repository", func(pr *data.PullRequestData) { pr.Repository.NameWithOwner = "owner/other" }},
++		{"fork with same repository name", func(pr *data.PullRequestData) { pr.HeadRepository.NameWithOwner = "fork/repo" }},
++		{"deleted head repository", func(pr *data.PullRequestData) { pr.HeadRepository.NameWithOwner = "" }},
++		{"merged parent", func(pr *data.PullRequestData) { pr.State = "MERGED" }},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			m := stackList(t, false)
++			parent := stackPR(1, "main", "base")
++			tc.change(parent.Primary)
++			receiveStackPage(&m, stackPR(2, "base", "tip"), parent)
++			require.Equal(t, 2, m.GetCurrRow().GetNumber())
++			for _, row := range m.BuildRows() {
++				require.NotContains(t, ansi.Strip(row[1]), "┌")
++				require.NotContains(t, ansi.Strip(row[1]), "└")
++			}
++		})
++	}
++}
+diff --git a/internal/tui/components/prview/prview.go b/internal/tui/components/prview/prview.go
 --- a/internal/tui/components/prview/prview.go
 +++ b/internal/tui/components/prview/prview.go
 @@ -178,6 +178,7 @@
@@ -53,6 +418,8 @@
  	reviewers := m.renderRequestedReviewers()
  	if reviewers != "" {
  		body.WriteString(reviewers)
+diff --git a/internal/tui/components/prview/deployments.go b/internal/tui/components/prview/deployments.go
+new file mode 100644
 --- /dev/null
 +++ b/internal/tui/components/prview/deployments.go
 @@ -0,0 +1,48 @@
