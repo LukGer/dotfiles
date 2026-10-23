@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { blockedCommand, CATEGORIES, duplicateOf, type Finding, renderMarkdown, type Review, SEVERITIES, SPECIALISTS, summariseUsage } from "./lib.ts";
+import { blockedCommand, CATEGORIES, duplicateOf, type Finding, renderMarkdown, type Review, SEVERITIES, SPECIALISTS, specialistPrompt, summariseUsage } from "./lib.ts";
 
 const HERE = import.meta.dirname;
 const OUT = process.env.GHD_REVIEW!;
@@ -154,8 +154,7 @@ export default function (pi: ExtensionAPI) {
     }),
     async execute(_id, params: any, signal) {
       progress({ kind: "agent_start", label: params.specialist });
-      const prompt = [`Specialist pass: ${params.specialist}`, `Packet: ${OUT}.packet.md`, `Head: ${HEAD}`,
-        params.skill ? `Repository review skill in your system prompt: ${params.skill}; its references live next to it.` : "", "", "Scope:", params.scope].join("\n");
+      const prompt = specialistPrompt(params, { packet: `${OUT}.packet.md`, head: HEAD, instructions: process.env.GHD_INSTRUCTIONS });
       const run = await runSpecialist(params.specialist, params.skill, prompt, signal, (event) => {
         if (event.type === "tool_execution_end" && event.toolName !== "codemode") progress({ kind: "tool", label: `${params.specialist}:${event.toolName}` });
       });
@@ -202,7 +201,7 @@ export default function (pi: ExtensionAPI) {
       progress({ kind: "check", ok: !problems.length });
       if (problems.length) return { ...text(`Not finished: ${problems.join("; ")}`), details: undefined, isError: true };
       writeFileSync(findingsFile, JSON.stringify(final, null, 2));
-      writeFileSync(`${OUT}.md`, renderMarkdown(final, { repo: meta.repo, pr: meta.pr, title: meta.title, tool: meta.tool, model: meta.model ?? MODEL ?? "", sha: HEAD }));
+      writeFileSync(`${OUT}.md`, renderMarkdown(final, { repo: meta.repo, pr: meta.pr, title: meta.title, tool: meta.tool, model: meta.model ?? MODEL ?? "", sha: HEAD, instructions: meta.instructions }));
       progress({ kind: "file", label: findingsFile });
       progress({ kind: "file", label: `${OUT}.md` });
       return { ...text(`Review finished with ${final.findings.length} finding(s).`), details: undefined, terminate: true };

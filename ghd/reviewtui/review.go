@@ -38,6 +38,8 @@ type Meta struct {
 	Title   string `json:"title"`
 	Session string `json:"session"`
 	Cwd     string `json:"cwd"`
+
+	Instructions string `json:"instructions"`
 }
 
 var (

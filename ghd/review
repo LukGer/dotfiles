@@ -1,13 +1,16 @@
 #!/bin/zsh
-# Usage: ghd review <owner/repo> <pr> [pi [provider/model[:thinking]] | opencode | claude]
+# Usage: ghd review <owner/repo> <pr> [pi [provider/model[:thinking]] | opencode | claude] [--instructions <text>]
 #
 # Without a tool, shows the review menu. With one, checks the PR head out into
 # a throwaway detached worktree, gathers the review packet, runs the pr-review
 # skill in it, and removes the worktree when the agent exits. The agent only
 # reads; this script owns every git write. pi is the harness the dashboard
-# uses; opencode and claude remain available from the shell.
+# uses; opencode and claude remain available from the shell. Instructions
+# from the human steer the review's scope and focus.
 
 lib=${0:A:h}
+zparseopts -D -E -- -instructions:=instructions
+instructions=${instructions[2]}
 repo=$1 pr=$2 tool=$3
 case $tool in
   pi) model=${4:-openai-codex/gpt-6.1-sol:high} ;;
@@ -16,20 +19,21 @@ case $tool in
 esac
 
 if [[ -z $tool ]]; then
+  selection=$(mktemp -t ghd-menu)
   if [[ -n $TMUX ]]; then
-    selection=$(mktemp -t ghd-menu)
-    tmux display-popup -E -x C -y C -w 64 -h 10 -b rounded -T "Review $repo#$pr" \
-      -e "PATH=$PATH" "${(qq)lib}/menu > ${(qq)selection}"
-    pick=$(<$selection)
-    rm -f $selection
+    tmux display-popup -E -x C -y C -w 72 -h 16 -b rounded -T "Review $repo#$pr" \
+      -e "PATH=$PATH" "${(qq)lib}/tui menu ${(qq)selection}"
   else
-    pick=$($lib/menu)
+    $lib/tui menu $selection
   fi
-  case $pick in
-    GPT-*) exec $lib/open popup $lib/review $repo $pr pi openai-codex/gpt-6.1-sol:high ;;
-    Opus*) exec $lib/open popup $lib/review $repo $pr pi anthropic/claude-opus-5-5:high ;;
-    Past*) exec $lib/open popup $lib/history.py $repo $pr ;;
-    Post*) exec $lib/open popup $lib/post.py $repo $pr ;;
+  action=$(jq -r '.action // empty' $selection 2>/dev/null)
+  model=$(jq -r '.model // empty' $selection 2>/dev/null)
+  instructions=$(jq -r '.instructions // empty' $selection 2>/dev/null)
+  rm -f $selection
+  case $action in
+    review) exec $lib/open popup $lib/review $repo $pr pi $model --instructions "$instructions" ;;
+    past) exec $lib/open popup $lib/history.py $repo $pr ;;
+    post) exec $lib/open popup $lib/post.py $repo $pr ;;
   esac
   exit 0
 fi
@@ -80,8 +84,8 @@ fi
 session=$(uuidgen | tr A-Z a-z)
 [[ $tool == opencode ]] && session=ses_ghd${session//-/}
 jq -n --arg repo $repo --argjson pr $pr --arg tool $tool --arg model $model --arg sha $head --arg title $title \
-  --arg at "$(date '+%Y-%m-%d %H:%M')" --arg session $session --arg cwd $PWD \
-  '{repo: $repo, pr: $pr, tool: $tool, model: $model, sha: $sha, title: $title, at: $at, session: $session, cwd: $cwd}' > $out.json
+  --arg instructions "$instructions" --arg at "$(date '+%Y-%m-%d %H:%M')" --arg session $session --arg cwd $PWD \
+  '{repo: $repo, pr: $pr, tool: $tool, model: $model, sha: $sha, title: $title, instructions: $instructions, at: $at, session: $session, cwd: $cwd}' > $out.json
 print '  Gathering the review packet...'
 python3 $lib/packet.py $repo $pr ${merge_base:-none} $head > $out.packet.md || fail "Could not gather the packet for $repo#$pr."
 
@@ -104,13 +108,16 @@ previous_sha: $(jq -r .sha $prev.json)"
 fi
 brief+="
 For GitHub API reads, use gh api --method GET <endpoint>."
+[[ -n $instructions ]] && brief+="
+Instructions from the human who requested this review:
+$instructions"
 
 print '  Reviewing… scroll up for earlier output; q returns to live output. Ctrl+C cancels.'
 SECONDS=0
 export GHD_PROGRESS=$out.progress
 case $tool in
   pi)
-    export GHD_REVIEW=$out GHD_HEAD=$head GHD_MERGE_BASE=$merge_base GHD_MODEL=$model
+    export GHD_REVIEW=$out GHD_HEAD=$head GHD_MERGE_BASE=$merge_base GHD_MODEL=$model GHD_INSTRUCTIONS=$instructions
     skill=$(awk 'c >= 2 { print } /^---$/ { c++ }' $lib/../ai/skills/pr-review/SKILL.md)
     pi_args=(-p --mode json --session-id $session --model $model
       --tools 'read,bash,codemode,review_pass,save_finding,finish_review,mcp__atlassian__*'

@@ -16,7 +16,7 @@ export type Review = {
   passes?: { specialist: string; status: string; note?: string }[];
   coverage_gaps?: string[];
 };
-export type Meta = { repo: string; pr: number | string; title: string; tool: string; model: string; sha: string };
+export type Meta = { repo: string; pr: number | string; title: string; tool: string; model: string; sha: string; instructions?: string };
 
 const GIT_WRITES = /\bgit\s+(-[^\s]+\s+)*(add|am|apply|branch\s+(-[dDmM]|--delete)|checkout|cherry-pick|clean|commit|fetch|merge|mv|pull|push|rebase|reset|restore|revert|rm|stash|switch|tag\s+-d|worktree)\b/;
 const FILE_WRITES = /\brm\s|\bmv\s|\btee\b|(^|[^&<>0-9])>>?(?!\s*(&|\/dev\/null))/;
@@ -43,7 +43,9 @@ const table = (header: string[], rows: string[][]) =>
 
 export function renderMarkdown(review: Review, meta: Meta): string {
   const findings = [...review.findings].sort((a, b) => SEVERITIES.indexOf(a.severity as any) - SEVERITIES.indexOf(b.severity as any));
-  const lines = [`# ${meta.repo}#${meta.pr} ${meta.title}`, "", `${meta.sha.slice(0, 7)} · ${meta.tool} ${meta.model}`, "", review.tldr, "", "## Findings", ""];
+  const lines = [`# ${meta.repo}#${meta.pr} ${meta.title}`, "", `${meta.sha.slice(0, 7)} · ${meta.tool} ${meta.model}`, ""];
+  if (meta.instructions) lines.push(`**Instructions:** ${meta.instructions}`.replace(/^/gm, "> "), "");
+  lines.push(review.tldr, "", "## Findings", "");
   lines.push(...(findings.length
     ? table(["#", "Category", "P", "Pointer", "Comment"], findings.map((f, i) => [String(i + 1), f.category, f.severity, pointer(f), f.comment]))
     : ["No findings."]));
@@ -60,6 +62,12 @@ export function renderMarkdown(review: Review, meta: Meta): string {
     if (review.coverage_gaps?.length) lines.push("", ...review.coverage_gaps.map((g) => `- ${g}`));
   }
   return lines.join("\n") + "\n";
+}
+
+export function specialistPrompt(pass: { specialist: string; scope: string; skill?: string }, run: { packet: string; head: string; instructions?: string }): string {
+  return [`Specialist pass: ${pass.specialist}`, `Packet: ${run.packet}`, `Head: ${run.head}`,
+    pass.skill ? `Repository review skill in your system prompt: ${pass.skill}; its references live next to it.` : "", "", "Scope:", pass.scope,
+    ...(run.instructions ? ["", "Instructions from the human who requested this review:", run.instructions] : [])].join("\n");
 }
 
 export type Usage = { turns: number; input: number; output: number; cacheRead: number; cacheWrite: number; cost: number; error?: string };

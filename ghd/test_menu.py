@@ -17,14 +17,20 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 
 
-@pytest.mark.skipif(any(not shutil.which(name) for name in ("tmux", "fzf", "glow")),
-                    reason="needs tmux, fzf and glow")
-@pytest.mark.parametrize("key, tool, paragraphs, action, response", [
-    (b"\x1b", None, 0, None, None), (b"q", None, 0, None, None),
-    (b"1", "pi", 1, b"p", b"nothing selected"),
-    (b"2", "pi", 80, b"c", b"CONVERSATION-READY"),
+@pytest.fixture(scope="module", autouse=True)
+def built_review_screen():
+    # The test's empty MISE_DATA_DIR has no Go toolchain, so build with the real one first.
+    subprocess.run([str(ROOT / "ghd/tui")], capture_output=True, timeout=600)
+
+
+@pytest.mark.skipif(any(not shutil.which(name) for name in ("tmux", "glow")),
+                    reason="needs tmux and glow")
+@pytest.mark.parametrize("key, instructions, tool, paragraphs, action, response", [
+    (b"\x1b", "", None, 0, None, None), (b"q", "", None, 0, None, None),
+    (b"1", "", "pi", 1, b"p", b"nothing selected"),
+    (b"2", "quality only, skip gen/", "pi", 80, b"c", b"CONVERSATION-READY"),
 ])
-def test_review_menu_waits_for_selection_before_returning_to_dashboard(tmp_path, key, tool, paragraphs, action, response):
+def test_review_menu_waits_for_selection_before_returning_to_dashboard(tmp_path, key, instructions, tool, paragraphs, action, response):
     tmux = ["tmux", "-L", f"ghd-test-{uuid.uuid4().hex}"]
     record = tmp_path / "calls.jsonl"
     stub = tmp_path / "stub"
@@ -102,6 +108,13 @@ elif name == 'glow':
         if tool:
             output = b""
             deadline = time.monotonic() + 5
+            while b"Instructions" not in output:
+                assert time.monotonic() < deadline, f"choosing a model did not ask for instructions: {output[-800:]!r}"
+                if select.select([master], [], [], .05)[0]:
+                    output += os.read(master, 65536)
+            os.write(master, instructions.encode() + b"\r")
+            output = b""
+            deadline = time.monotonic() + 5
             while b"REVIEW-RUNNING" not in output:
                 assert time.monotonic() < deadline, "review did not start"
                 if select.select([master], [], [], .05)[0]:
@@ -140,7 +153,9 @@ elif name == 'glow':
         assert menu.returncode == 0, stderr.decode()
         if tool:
             calls = [json.loads(line) for line in record.read_text().splitlines()]
-            assert any(name == tool for name, *_ in calls)
+            brief = next(args for name, *args in calls if name == tool)[-1]
+            assert ("Instructions from the human" in brief) == bool(instructions)
+            assert brief.endswith(instructions)
             assert not any(name == "osascript" for name, *_ in calls)
         else:
             assert not record.exists()

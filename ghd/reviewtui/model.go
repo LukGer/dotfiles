@@ -473,7 +473,16 @@ func (m *model) runView(header string) string {
 	left := lipgloss.NewStyle().Width(m.sideWidth()).Height(m.log.Height).Render(strings.Join(side, "\n"))
 	right := border.Render(m.log.View())
 	footer := dim.Render("↑/↓ scroll · G follow · ctrl+c cancel")
-	return strings.Join([]string{header, dim.Render(info), "", lipgloss.JoinHorizontal(lipgloss.Top, left, right), footer}, "\n")
+	return m.frame(header, info, lipgloss.JoinHorizontal(lipgloss.Top, left, right), footer)
+}
+
+// frame stacks a screen; the line under the info shows the human's instructions, if any.
+func (m *model) frame(header, info, body, footer string) string {
+	instructions := ""
+	if m.meta.Instructions != "" {
+		instructions = lipgloss.NewStyle().MaxWidth(m.width).Render(accent.Render("Instructions: ") + dim.Render(strings.Join(strings.Fields(m.meta.Instructions), " ")))
+	}
+	return strings.Join([]string{header, dim.Render(info), instructions, body, footer}, "\n")
 }
 
 func (m *model) phase() string {
@@ -532,7 +541,7 @@ func (m *model) reviewView(header string) string {
 	if m.status != "" {
 		footer = warn.Render(m.status) + "  " + footer
 	}
-	return strings.Join([]string{header, dim.Render(info), "", lipgloss.JoinHorizontal(lipgloss.Top, left, right), footer}, "\n")
+	return m.frame(header, info, lipgloss.JoinHorizontal(lipgloss.Top, left, right), footer)
 }
 
 func shortSHA(sha string) string {

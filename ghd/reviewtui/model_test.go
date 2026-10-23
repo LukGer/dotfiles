@@ -116,3 +116,18 @@ func TestReadPasses(t *testing.T) {
 		t.Fatalf("got %+v", passes)
 	}
 }
+
+func TestHeaderShowsTheInstructionsTheReviewRanWith(t *testing.T) {
+	for _, tc := range []struct {
+		instructions string
+		want         string
+	}{
+		{"", ""},
+		{"Only a.go.\n  Skip tests.", "Instructions: Only a.go. Skip tests."},
+	} {
+		m := savedReview(t, Meta{Repo: "o/r", PR: 1, Tool: "pi", Instructions: tc.instructions}, nil)
+		if got := strings.Contains(m.View(), "Instructions:"); got != (tc.want != "") || !strings.Contains(m.View(), tc.want) {
+			t.Fatalf("%q: view:\n%s", tc.instructions, m.View())
+		}
+	}
+}

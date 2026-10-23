@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { blockedCommand, duplicateOf, renderMarkdown, summariseUsage } from "./lib.ts";
+import { blockedCommand, duplicateOf, renderMarkdown, specialistPrompt, summariseUsage } from "./lib.ts";
 
 describe("blockedCommand", () => {
   const allowed = [
@@ -80,6 +80,30 @@ describe("renderMarkdown", () => {
     const bare = renderMarkdown({ tldr: "Clean.", findings: [] }, { repo: "o/r", pr: 1, title: "T", tool: "pi", model: "m", sha: "abc" });
     assert.ok(!bare.includes("Dropped") && !bare.includes("Since last review") && bare.includes("No findings."));
   });
+  for (const [instructions, quoted] of [["", null], ["Only src/.\nSkip tests.", "> **Instructions:** Only src/.\n> Skip tests."]] as const) {
+    test(`quotes the human's instructions: ${JSON.stringify(instructions)}`, () => {
+      const scoped = renderMarkdown({ tldr: "Clean.", findings: [] }, { repo: "o/r", pr: 1, title: "T", tool: "pi", model: "m", sha: "abc", instructions });
+      assert.equal(scoped.includes("Instructions"), quoted !== null);
+      if (quoted) assert.ok(scoped.includes(`abc · pi m\n\n${quoted}\n\nClean.`), scoped);
+    });
+  }
+});
+
+describe("specialistPrompt", () => {
+  const pass = { specialist: "security", scope: "a.ts:1-20" };
+  const run = { packet: "/r.packet.md", head: "abc" };
+  for (const [name, params, extra, expected, absent] of [
+    ["generic pass", pass, {}, ["Specialist pass: security", "Packet: /r.packet.md", "Head: abc", "Scope:\na.ts:1-20"], ["skill", "Instructions"]],
+    ["repository skill", { ...pass, skill: ".agents/skills/x/SKILL.md" }, {}, [".agents/skills/x/SKILL.md; its references"], ["Instructions"]],
+    ["human instructions", pass, { instructions: "Ignore gen/." }, ["Instructions from the human who requested this review"], []],
+  ] as const) {
+    test(name, () => {
+      const prompt = specialistPrompt(params, { ...run, ...extra });
+      for (const text of expected) assert.ok(prompt.includes(text), prompt);
+      for (const text of absent) assert.ok(!prompt.includes(text), prompt);
+      if ("instructions" in extra) assert.ok(prompt.endsWith(extra.instructions), prompt);
+    });
+  }
 });
 
 describe("summariseUsage", () => {

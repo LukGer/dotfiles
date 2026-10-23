@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 def cli(tmp_path):
     stub = tmp_path / "stub"
     stub.write_text("""#!/usr/bin/env python3
-import json, os, pathlib, subprocess, sys
+import json, os, pathlib, shlex, subprocess, sys
 name = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
 with open(os.environ['CALLS'], 'a') as f:
@@ -41,8 +41,9 @@ elif name == 'tmux':
     if os.environ.get('TMUX_FAIL'):
         sys.exit(1)
     child_env = {**os.environ, 'TERM_PROGRAM': 'tmux'}
-    if args[0] == 'display-popup' and (os.environ.get('RUN_POPUP') or
-        (os.environ.get('MENU_CHOICE') and args[args.index('-w') + 1] == '64')):
+    if args[0] == 'display-popup' and os.environ.get('MENU_CHOICE') and ' menu ' in args[-1]:
+        pathlib.Path(shlex.split(args[-1])[-1]).write_text(os.environ['MENU_CHOICE'])
+    elif args[0] == 'display-popup' and os.environ.get('RUN_POPUP'):
         sys.exit(subprocess.call(args[-1], shell=True, env=child_env))
 elif name in ('opencode', 'claude', 'pi'):
     with open(os.environ['CALLS'], 'a') as f:
@@ -113,8 +114,9 @@ def test_f_key_opens_a_floating_review_menu(cli):
     assert result.returncode == 0, result.stderr
     menus = [args for name, *args in calls if name == "tmux" and args[0] == "display-popup"]
     assert len(menus) == 1, calls
-    assert menus[0][menus[0].index("-w") + 1] == "64"
-    assert menus[0][menus[0].index("-h") + 1] == "10"
+    assert menus[0][menus[0].index("-w") + 1] == "72"
+    assert menus[0][menus[0].index("-h") + 1] == "16"
+    assert shlex.split(menus[0][-1])[:2] == [str(ROOT / "ghd/tui"), "menu"]
     assert not any(name in ("fzf", "osascript") for name, *_ in calls)
 
 
@@ -317,17 +319,30 @@ def test_review_brief_points_at_the_previous_review_of_the_same_pr(cli, tmp_path
     assert "check: ghd check " in brief
 
 
-@pytest.mark.parametrize("choice, model", [
-    ("GPT-6.1 Sol · high · pi", "openai-codex/gpt-6.1-sol:high"),
-    ("Opus 5.5 · high · pi", "anthropic/claude-opus-5-5:high"),
+@pytest.mark.parametrize("choice, review_args", [
+    ({"action": "review", "model": "openai-codex/gpt-6.1-sol:high"}, ["pi", "openai-codex/gpt-6.1-sol:high", "--instructions", ""]),
+    ({"action": "review", "model": "anthropic/claude-opus-5-5:high", "instructions": "Only src/, it's #1\nskip $HOME"},
+     ["pi", "anthropic/claude-opus-5-5:high", "--instructions", "Only src/, it's #1\nskip $HOME"]),
 ])
-def test_menu_launches_review_in_the_dashboard_popup(cli, choice, model):
-    result, calls = cli("review", "owner/repo", "42", MENU_CHOICE=choice)
+def test_menu_launches_review_in_the_dashboard_popup(cli, choice, review_args):
+    result, calls = cli("review", "owner/repo", "42", MENU_CHOICE=json.dumps(choice))
     assert result.returncode == 0, result.stderr
     popups = [args for name, *args in calls if name == "tmux" and args[0] == "display-popup"]
     assert len(popups) == 2, calls
-    assert shlex.split(popups[-1][-1])[-4:] == ["owner/repo", "42", "pi", model]
+    assert shlex.split(popups[-1][-1])[-2 - len(review_args):] == ["owner/repo", "42", *review_args]
     assert not any(name == "osascript" for name, *_ in calls)
+
+
+@pytest.mark.parametrize("tool", ["pi", "claude", "opencode"])
+@pytest.mark.parametrize("instructions", ["", "Only review src/api.\nIgnore generated files."])
+def test_review_instructions_reach_the_reviewer_and_the_saved_metadata(cli, tmp_path, tool, instructions):
+    result, calls = cli("review", "owner/repo", "42", tool, "--instructions", instructions)
+    assert result.returncode == 0, result.stderr
+    brief = next(args for name, *args in calls if name == tool)[-1]
+    assert ("Instructions from the human" in brief) == bool(instructions)
+    assert brief.endswith(instructions)
+    meta = json.loads(next((tmp_path / "reviews").glob("*.json")).read_text())
+    assert meta["instructions"] == instructions
 
 
 @pytest.mark.parametrize("key, model", [("ctrl+g", "anthropic/claude-opus-5-5:high"), ("ctrl+t", "openai-codex/gpt-6.1-sol:high")])
@@ -378,12 +393,9 @@ def test_popup_can_open_a_ghostty_tab_with_literal_arguments(cli):
     assert shlex.split(surfaces[0][2]) == ["printf", "hello 'world' $HOME"]
 
 
-@pytest.mark.parametrize("choice, script", [
-    ("Past reviews of this PR", "history.py"),
-    ("Post to GitHub (pending)", "post.py"),
-])
-def test_menu_opens_the_selected_picker_in_a_larger_popup(cli, choice, script):
-    result, calls = cli("review", "owner/repo", "42", MENU_CHOICE=choice)
+@pytest.mark.parametrize("action, script", [("past", "history.py"), ("post", "post.py")])
+def test_menu_opens_the_selected_picker_in_a_larger_popup(cli, action, script):
+    result, calls = cli("review", "owner/repo", "42", MENU_CHOICE=json.dumps({"action": action}))
     assert result.returncode == 0, result.stderr
     popups = [args for name, *args in calls if name == "tmux" and args[0] == "display-popup"]
     assert len(popups) == 2

@@ -29,7 +29,7 @@ viewers run in place.
 | Key | Action |
 | --- | --- |
 | `ctrl+g` / `ctrl+t` | Opus 5.5 / GPT-6.1 Sol high review (both through pi) in a popup in this window |
-| `f` | Menu: models with their harnesses, past reviews of this PR, post |
+| `f` | Menu: models with their harnesses (then instructions for that review), past reviews of this PR, post |
 | `E` | Past reviews of every PR: `enter` reads one here, `ctrl-y` copies it |
 | `ctrl+o` | Post findings as a pending review |
 | `d` / `D` | Diff in a new tab, side by side |
@@ -39,6 +39,10 @@ viewers run in place.
 
 gh-dash's own keys still work; `?` lists them. The review menu floats in the
 centre of the dashboard; choose with `1`–`4` or the arrow keys and enter.
+Choosing a model then asks for instructions for this review, such as files to
+focus on or skip and concerns to weigh: enter starts the review (leave it empty
+for a full review), alt+enter or ctrl+j adds a line, and escape returns to the
+models with the draft kept. The menu is `ghd tui menu`, part of the review screen.
 The `f` key launches it through a background tmux job so gh-dash resumes
 rendering behind the popup instead of staying suspended on a blank screen.
 History and posting pickers open in floating popups and close when you are done.
@@ -85,8 +89,10 @@ change the release and toolchain in `dash` and rebase `gh-dash.patch`.
 
 ## Reviews
 
-`ghd review <owner/repo> <pr> [pi [provider/model[:thinking]] | opencode | claude]`
-also works from any shell. The dashboard runs every review through pi; the
+`ghd review <owner/repo> <pr> [pi [provider/model[:thinking]] | opencode | claude] [--instructions <text>]`
+also works from any shell. `--instructions` carries the menu's instructions:
+they end the brief, every pi specialist pass receives them verbatim, and the
+review's metadata, markdown and screen show them. The dashboard runs every review through pi; the
 picker lists GPT-6.1 Sol (high) first and Opus 5.5 (high) second, and both
 pin the model explicitly. `opencode` and `claude` remain available from the
 shell as single-pass reviewers on the same skill.
@@ -205,12 +211,12 @@ supplies both.
 | `dash`, `gh-dash.patch` | cached gh-dash build with PR stack grouping and deployment details |
 | `deployment.py`, `test_deployment.py` | open active GitHub environments, with CLI tests for selection and failures |
 | `open` | Ghostty tabs and windows via AppleScript; tmux popups |
-| `review` | menu, worktree, packet, agent launch, cleanup |
+| `review` | menu dispatch, instructions, worktree, packet, agent launch, cleanup |
 | `packet.py`, `test_packet.py` | the review packet every reviewer reads |
 | `pi/review.ts`, `pi/lib.ts`, `pi/lib.test.ts` | pi extension: `review_pass`, `save_finding`, `finish_review`, the read-only guard, progress events; pure helpers tested with `node --test` |
 | `pi/orchestrator.md`, `pi/specialist.md`, `pi/specialists/` | system prompt additions for the orchestrator, every pass, and the generic specialist checklists |
 | `pi.py`, `test_pi.py` | stream pi's JSON events off a terminal and fail on provider errors |
-| `tui`, `reviewtui/` | the review screen: cached Go build, Bubble Tea program with its own `go test` suite |
+| `tui`, `reviewtui/` | the review menu and review screen: cached Go build, Bubble Tea program with its own `go test` suite |
 | `noninteractive.py` | run claude and opencode with stdin closed, suppress typing and restore terminal input |
 | `claude.py` | render Claude's streaming text and tool calls while preserving its exit status |
 | `progress.py`, `progress-plugin.ts` | progress events (`<review>.progress`) from Claude hooks and the OpenCode plugin, and the pane above those agents; the pi extension writes the same events itself; `test_progress.py` covers both |
@@ -218,14 +224,13 @@ supplies both.
 | `check.py` | findings validator shared by the agents, `save_finding` and `review`; `test_check.py` covers it |
 | `mcp.json` | Atlassian MCP server for Claude's Jira reads |
 | `config/opencode/agents/pr-review.md` | the OpenCode agent `review` launches |
-| `menu` | compact chooser with number shortcuts and no search input |
 | `post.py` | finding picker, `--pick`, and pending-review GraphQL; `test_post.py` covers placement |
 | `history.py`, `save.py` | past reviews with their duration; ad-hoc saves |
 | `diff`, `pager`, `info` | diff and description viewers |
 | `config/gh-dash/config.yml` | sections and keys |
 | `install.sh` | links the OpenCode agent and progress plugin and registers pi's Atlassian MCP server on `dot` runs |
 | `test_ui.py` | keybindings, menu actions, popup routing and automatic review completion |
-| `test_menu.py` | real tmux/fzf lifecycle: choose a reviewer, read the result and return here |
+| `test_menu.py` | real tmux lifecycle: choose a reviewer, give instructions, read the result and return here |
 
 Tests: `uv run --with pytest pytest ghd` (includes the `node --test` run of the
 pi helpers) and `mise exec go@1.27.1 -- go test ./...` in `ghd/reviewtui`.

@@ -19,7 +19,7 @@ hooks:
 
 Review someone else's pull request. You are a reader: the output is two files that the human curates and posts with `ghd post`.
 
-The brief from `ghd review` names the PR, `base`, `merge_base`, `head`, `review_file`, `findings_file`, `check` and `tool`. After an earlier review of the same PR it also names `previous_review`, `previous_findings` and `previous_sha`. The working directory is a detached worktree at `head`. When `merge_base` is `none` there is no checkout: read the diff with `gh pr diff` and files with `gh api "repos/<repo>/contents/<path>?ref=<head>"`.
+The brief from `ghd review` names the PR, `base`, `merge_base`, `head`, `review_file`, `findings_file`, `check` and `tool`. After an earlier review of the same PR it also names `previous_review`, `previous_findings` and `previous_sha`. When it ends with instructions from the human who requested the review, they set its scope and focus: review only what they include, treat what they exclude as out of scope rather than a coverage gap, and weigh the concerns they name. They override this skill's defaults where the two conflict, never the contract below. The working directory is a detached worktree at `head`. When `merge_base` is `none` there is no checkout: read the diff with `gh pr diff` and files with `gh api "repos/<repo>/contents/<path>?ref=<head>"`.
 
 ## Contract
 

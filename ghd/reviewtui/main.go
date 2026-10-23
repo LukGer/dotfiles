@@ -3,6 +3,7 @@
 //
 //	ghd tui <review prefix>                 read a saved review
 //	ghd tui <review prefix> -- <command>    run the reviewer, then read its review
+//	ghd tui menu <result file>              choose a reviewer and its instructions
 //
 // The prefix is the path of a review without its extension; its .json, .findings,
 // .md, .progress and .packet.md files live next to it. GHD_LIB names the ghd
@@ -19,8 +20,15 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: ghd tui <review prefix> [-- command...]")
+		fmt.Fprintln(os.Stderr, "usage: ghd tui <review prefix> [-- command...] | ghd tui menu <result file>")
 		os.Exit(2)
+	}
+	if os.Args[1] == "menu" && len(os.Args) == 3 {
+		if err := runMenu(os.Args[2]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
 	}
 	var command []string
 	if at := slices.Index(os.Args, "--"); at > 0 {
