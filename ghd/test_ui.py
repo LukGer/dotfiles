@@ -23,7 +23,12 @@ with open(os.environ['CALLS'], 'a') as f:
 if name == 'osascript':
     sys.stdin.read()
 elif name == 'gh':
-    print('A review\\tauthor\\t' + os.environ.get('PR_HEAD', '1234567890') + '\\tmain')
+    if args[:1] == ['api']:
+        endpoint = next(a for a in args if a.startswith('repos/'))
+        pull = {'title': 'A review', 'body': 'Closes ABC-1', 'user': {'login': 'author'}, 'head': {'ref': 'feature'}, 'base': {'ref': 'main'}}
+        print(json.dumps([pull] if endpoint.split('/')[-1].isdigit() else [[]]))
+    else:
+        print('A review\\tauthor\\t' + os.environ.get('PR_HEAD', '1234567890') + '\\tmain')
 elif name == 'git':
     if os.environ.get('REAL_GIT'):
         os.execv(os.environ['REAL_GIT'], ['git', *args])
@@ -39,7 +44,7 @@ elif name == 'tmux':
     if args[0] == 'display-popup' and (os.environ.get('RUN_POPUP') or
         (os.environ.get('MENU_CHOICE') and args[args.index('-w') + 1] == '64')):
         sys.exit(subprocess.call(args[-1], shell=True, env=child_env))
-elif name in ('opencode', 'claude'):
+elif name in ('opencode', 'claude', 'pi'):
     with open(os.environ['CALLS'], 'a') as f:
         f.write(json.dumps(['agent-progress', os.environ.get('GHD_PROGRESS', '')]) + '\\n')
     if os.environ.get('CHECK_AGENT_INPUT'):
@@ -47,6 +52,10 @@ elif name in ('opencode', 'claude'):
             f.write(json.dumps(['agent-input', sys.stdin.read()]) + '\\n')
     if os.environ.get('AGENT_FAIL'):
         sys.exit(1)
+    if name == 'pi' and os.environ.get('PI_EVENTS'):
+        assert args[:3] == ['-p', '--mode', 'json']
+        for event in json.loads(os.environ['PI_EVENTS']):
+            print(json.dumps(event), flush=True)
     if name == 'claude' and os.environ.get('CLAUDE_EVENTS'):
         events = json.loads(os.environ['CLAUDE_EVENTS'])
         if '--output-format' in args and args[args.index('--output-format') + 1] == 'stream-json':
@@ -62,7 +71,7 @@ elif name in ('opencode', 'claude'):
                     pathlib.Path(line[len(field):]).write_text(os.environ.get('FINDINGS', '{"tldr": "stub", "findings": []}'))
 """)
     stub.chmod(0o755)
-    for command in ("tmux", "osascript", "fzf", "gh", "git", "opencode", "claude", "glow"):
+    for command in ("tmux", "osascript", "fzf", "gh", "git", "opencode", "claude", "pi", "glow"):
         (tmp_path / command).symlink_to(stub)
     calls_file = tmp_path / "calls.jsonl"
     env = {
@@ -73,6 +82,7 @@ elif name in ('opencode', 'claude'):
         "TMUX": "/tmp/ghd-test,1,0",
         "GHD_STORE": str(tmp_path / "reviews"),
         "GHD_CODE_DIR": str(tmp_path / "clones"),
+        "MISE_DATA_DIR": str(tmp_path / "mise"),  # zshenv puts mise's shims first; keep the stubbed pi ahead of the real one
     }
 
     def run(*args, input_text="x", **overrides):
@@ -143,16 +153,23 @@ def test_dashboard_runs_in_the_calling_terminal(cli, terminal, exit_code):
     assert f"TERM_PROGRAM={terminal}" in args
 
 
-@pytest.mark.parametrize("tool, mode", [("opencode", "run"), ("claude", "-p")])
+MODELS = {"pi": "openai-codex/gpt-6.1-sol:high", "opencode": "openai/gpt-6.1-sol#high", "claude": "claude-opus-5-5"}
+
+
+@pytest.mark.parametrize("tool, mode", [("pi", "-p"), ("opencode", "run"), ("claude", "-p")])
 def test_review_finishes_without_an_interactive_agent_prompt(cli, tool, mode):
     result, calls = cli("review", "owner/repo", "42", tool)
     assert result.returncode == 0, result.stderr
     args = next(args for name, *args in calls if name == tool)
     assert mode in args
-    assert args[args.index("--model") + 1] == (
-        "openai/gpt-6.1-sol#high" if tool == "opencode" else "claude-opus-5-5"
-    )
-    if tool == "opencode":
+    assert args[args.index("--model") + 1] == MODELS[tool]
+    if tool == "pi":
+        assert args[args.index("-e") + 1] == str(ROOT / "ghd/pi/review.ts")
+        assert {"save_finding", "finish_review", "review_pass", "codemode"} <= set(args[args.index("--tools") + 1].split(","))
+        assert "# PR review" in args[args.index("--append-system-prompt") + 1], "the skill body without its frontmatter"
+        assert "---" not in args[args.index("--append-system-prompt") + 1].splitlines()[0]
+        assert args[args.index("--append-system-prompt", args.index("--append-system-prompt") + 1) + 1] == str(ROOT / "ghd/pi/orchestrator.md")
+    elif tool == "opencode":
         assert args[args.index("--agent") + 1] == "pr-review"
     else:
         assert args[args.index("--mcp-config") + 1] == str(ROOT / "ghd/mcp.json")
@@ -163,6 +180,36 @@ def test_review_finishes_without_an_interactive_agent_prompt(cli, tool, mode):
         assert {rule for rule in allowed if rule.startswith("Edit")} == {
             f"Edit(/{path})" for path in output_paths
         }
+
+
+@pytest.mark.parametrize("events, stdout, exit_code", [
+    ([{"type": "message_update", "assistantMessageEvent": {"type": "text_delta", "delta": "Reading"}},
+      {"type": "tool_execution_start", "toolCallId": "1", "toolName": "codemode", "args": {"code": "await tools.read({path: 'a'})\nmore"}},
+      {"type": "tool_execution_start", "toolCallId": "1/1", "parentToolCallId": "1", "toolName": "read", "args": {"path": "a"}},
+      {"type": "tool_execution_start", "toolCallId": "2", "toolName": "review_pass", "args": {"specialist": "security", "scope": "x"}},
+      {"type": "message_end", "message": {"role": "assistant", "stopReason": "toolUse"}}],
+     ["Reading", "codemode: await tools.read({path: 'a'})", "review_pass: security"], 0),
+    ([{"type": "message_end", "message": {"role": "assistant", "stopReason": "error", "errorMessage": "OAuth refresh failed"}}],
+     [], 1),
+])
+def test_pi_review_streams_text_and_tool_calls_and_surfaces_provider_errors(cli, events, stdout, exit_code):
+    result, _ = cli("review", "owner/repo", "42", "pi", PI_EVENTS=json.dumps(events), MISSING_OUTPUT="1" if exit_code else "")
+    assert result.returncode == exit_code, result.stderr
+    for line in stdout:
+        assert line in result.stdout
+    assert "read: a" not in result.stdout, "nested calls stay inside their script"
+    if exit_code:
+        assert "OAuth refresh failed" in result.stderr
+
+
+@pytest.mark.parametrize("tool", ["pi", "claude", "opencode"])
+def test_review_brief_names_the_gathered_packet(cli, tool):
+    result, calls = cli("review", "owner/repo", "42", tool)
+    assert result.returncode == 0, result.stderr
+    brief = next(args for name, *args in calls if name == tool)[-1]
+    packet = next(line.removeprefix("packet: ") for line in brief.splitlines() if line.startswith("packet: "))
+    text = Path(packet).read_text()
+    assert text.startswith("# owner/repo#42 A review") and "Jira: ABC-1" in text and "## Diff" in text
 
 
 def test_claude_review_displays_interim_text_and_tool_calls(cli):
@@ -186,7 +233,7 @@ def test_claude_review_displays_interim_text_and_tool_calls(cli):
     assert "internal-session" not in result.stdout
 
 
-@pytest.mark.parametrize("tool", ["claude", "opencode"])
+@pytest.mark.parametrize("tool", ["pi", "claude", "opencode"])
 def test_review_progress_is_recorded_next_to_the_review(cli, tool):
     result, calls = cli("review", "owner/repo", "42", tool)
     assert result.returncode == 0, result.stderr
@@ -196,7 +243,7 @@ def test_review_progress_is_recorded_next_to_the_review(cli, tool):
     assert [args for name, *args in calls if name == "agent-progress"] == [[findings.removesuffix(".findings") + ".progress"]]
 
 
-@pytest.mark.parametrize("tool", ["claude", "opencode"])
+@pytest.mark.parametrize("tool", ["pi", "claude", "opencode"])
 def test_running_reviewer_cannot_consume_user_input(cli, tool):
     result, calls = cli("review", "owner/repo", "42", tool,
                         CHECK_AGENT_INPUT="1", input_text="\n")
@@ -216,6 +263,8 @@ def test_unsuccessful_review_does_not_silently_close(cli, tmp_path, overrides):
     assert not [meta for meta in store.glob("*.json") if not meta.with_suffix(".md").exists()], "orphan metadata"
     assert bool(list(store.glob("*.findings.invalid"))) == ("FINDINGS" in overrides)
     assert not list(store.glob("*.findings"))
+    for leftover in [*store.glob("*.packet.md"), *store.glob("*.progress")]:
+        assert (store / (leftover.name.split(".")[0] + ".json")).exists(), f"orphan {leftover.name}"
 
 
 @pytest.mark.parametrize("anchor, valid", [("actual anchor", True), ("wrong anchor", False)])
@@ -267,31 +316,31 @@ def test_review_brief_points_at_the_previous_review_of_the_same_pr(cli, tmp_path
     assert "check: ghd check " in brief
 
 
-@pytest.mark.parametrize("choice, tool", [
-    ("GPT-6.1 Sol · high · OpenCode", "opencode"),
-    ("Opus 5.5 · Claude Code", "claude"),
+@pytest.mark.parametrize("choice, model", [
+    ("GPT-6.1 Sol · high · pi", "openai-codex/gpt-6.1-sol:high"),
+    ("Opus 5.5 · high · pi", "anthropic/claude-opus-5-5:high"),
 ])
-def test_menu_launches_review_in_the_dashboard_popup(cli, choice, tool):
+def test_menu_launches_review_in_the_dashboard_popup(cli, choice, model):
     result, calls = cli("review", "owner/repo", "42", MENU_CHOICE=choice)
     assert result.returncode == 0, result.stderr
     popups = [args for name, *args in calls if name == "tmux" and args[0] == "display-popup"]
     assert len(popups) == 2, calls
-    assert shlex.split(popups[-1][-1])[-3:] == ["owner/repo", "42", tool]
+    assert shlex.split(popups[-1][-1])[-4:] == ["owner/repo", "42", "pi", model]
     assert not any(name == "osascript" for name, *_ in calls)
 
 
-@pytest.mark.parametrize("key, tool", [("ctrl+g", "claude"), ("ctrl+t", "opencode")])
-def test_review_shortcuts_run_in_the_dashboard_popup(cli, key, tool):
+@pytest.mark.parametrize("key, model", [("ctrl+g", "anthropic/claude-opus-5-5:high"), ("ctrl+t", "openai-codex/gpt-6.1-sol:high")])
+def test_review_shortcuts_run_in_the_dashboard_popup(cli, key, model):
     command = [arg.replace("{{.RepoName}}", "owner/repo").replace("{{.PrNumber}}", "42")
                for arg in key_command(key)]
     result, calls = cli(*command[1:])
     assert result.returncode == 0, result.stderr
     popup = next(args for name, *args in calls if name == "tmux" and args[0] == "display-popup")
-    assert shlex.split(popup[-1])[-3:] == ["owner/repo", "42", tool]
+    assert shlex.split(popup[-1])[-4:] == ["owner/repo", "42", "pi", model]
     assert not any(name == "osascript" for name, *_ in calls)
 
 
-@pytest.mark.parametrize("tool", ["claude", "opencode"])
+@pytest.mark.parametrize("tool", ["pi", "claude", "opencode"])
 def test_completed_review_opens_its_saved_markdown_before_returning(cli, tool):
     result, calls = cli("review", "owner/repo", "42", tool, input_text="\n")
     assert result.returncode == 0, result.stderr
@@ -302,43 +351,6 @@ def test_completed_review_opens_its_saved_markdown_before_returning(cli, tool):
     assert len(viewers) == 1, calls
     assert "-p" in viewers[0] and viewers[0][-1] == markdown
     assert result.stdout.count("\a") == 1
-
-
-@pytest.mark.parametrize("tool, pin, resume", [("claude", "--session-id", "--resume"), ("opencode", "--session", "--session")])
-def test_completed_review_can_continue_the_conversation(cli, tool, pin, resume):
-    result, calls = cli("review", "owner/repo", "42", tool, input_text="c\n\n")
-    assert result.returncode == 0, result.stderr
-    review, follow_up = [args for name, *args in calls if name == tool]
-    session = review[review.index(pin) + 1]
-    assert follow_up[:2] == [resume, session]
-    assert not {"-p", "run"} & set(follow_up), "the follow-up is interactive"
-
-
-def test_hand_saved_review_has_no_conversation_to_continue(cli, tmp_path):
-    store = tmp_path / "reviews"
-    store.mkdir()
-    markdown = store / "adhoc.md"
-    markdown.write_text("# Ad-hoc review")
-    markdown.with_suffix(".json").write_text(json.dumps({
-        "repo": "owner/repo", "pr": 42, "at": "earlier", "tool": "opencode (ad-hoc)", "sha": "1234567890",
-    }))
-    result, calls = cli("history", MENU_CHOICE=str(markdown), input_text="c\n\n")
-    assert result.returncode == 0, result.stderr
-    assert "No conversation to continue" in result.stdout
-    assert not any(name in ("claude", "opencode") for name, *_ in calls)
-
-
-def test_completed_review_can_post_its_own_findings_without_reselecting(cli, tmp_path):
-    store = tmp_path / "reviews"
-    store.mkdir()
-    (store / "other.json").write_text(json.dumps({
-        "repo": "owner/repo", "pr": 42, "at": "earlier", "tool": "codex",
-    }))
-    (store / "other.findings").write_text('{"findings": []}')
-    result, calls = cli("review", "owner/repo", "42", "opencode", input_text="p\n\n")
-    assert result.returncode == 0, result.stderr
-    assert "The saved review has no findings to post." in result.stdout
-    assert not any(name == "fzf" for name, *_ in calls), "should post the review just displayed"
 
 
 def test_saved_review_opens_in_the_current_popup(cli, tmp_path):

@@ -1,0 +1,42 @@
+// ghd's review screen: watches a running reviewer, then lets you read, tick,
+// edit and post its findings.
+//
+//	ghd tui <review prefix>                 read a saved review
+//	ghd tui <review prefix> -- <command>    run the reviewer, then read its review
+//
+// The prefix is the path of a review without its extension; its .json, .findings,
+// .md, .progress and .packet.md files live next to it. GHD_LIB names the ghd
+// directory, for post.py and mcp.json.
+package main
+
+import (
+	"fmt"
+	"os"
+	"slices"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Fprintln(os.Stderr, "usage: ghd tui <review prefix> [-- command...]")
+		os.Exit(2)
+	}
+	var command []string
+	if at := slices.Index(os.Args, "--"); at > 0 {
+		command = os.Args[at+1:]
+	}
+	m, err := newModel(os.Args[1], os.Getenv("GHD_LIB"), command)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if m.mode == failed {
+		fmt.Fprintln(os.Stderr, m.exitErr)
+	}
+	os.Exit(m.exitCode)
+}

@@ -1,34 +1,11 @@
 #!/bin/zsh
 # Usage: ghd view <owner/repo> <pr> <markdown file>
 #
-# Reads a saved review, then offers to post its findings or to continue the
-# conversation with its reviewer while the review's working directory exists.
+# Opens a saved review. On a terminal that is the review screen (`ghd tui`),
+# where findings can be ticked, edited, posted, and the reviewer's conversation
+# continued while its working directory exists. Elsewhere the markdown is
+# printed.
 lib=${0:A:h}
-repo=$1 pr=$2 file=$3
-meta=${file%.md}.json
-
-continue_review() {
-  local tool=$(jq -r .tool $meta) session=$(jq -r '.session // empty' $meta) cwd=$(jq -r '.cwd // empty' $meta)
-  if [[ -z $session || ! -d $cwd ]]; then
-    print 'No conversation to continue: this review was saved by hand or its worktree is gone.'
-    return
-  fi
-  cd $cwd
-  case $tool in
-    claude) claude --resume $session --setting-sources user --mcp-config $lib/mcp.json --add-dir ${meta:h} ;;
-    opencode) opencode --session $session ;;
-  esac
-}
-
-PAGER=cat glow -p -s dark $file || exit 1
-read_options=(-r -s -k 1)
-[[ -t 0 ]] || read_options+=(-u 0)
-while read "${read_options[@]}" 'action?[p] choose findings to post · [c] continue with the reviewer · [esc] dashboard > '; do
-  print
-  case $action in
-    p) $lib/post.py $repo $pr --review ${file%.md}.findings ;;
-    c) continue_review ;;
-    $'\e') break ;;
-  esac
-done
-exit 0
+file=$3
+[[ -t 1 ]] && exec $lib/tui ${file%.md}
+PAGER=cat glow -p -s dark $file

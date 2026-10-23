@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pick findings from a saved review and add them to your pending GitHub review.
 
-Usage: ghd post <owner/repo> <pr> [--dry] [--review <findings file>]
+Usage: ghd post <owner/repo> <pr> [--dry] [--review <findings file>] [--pick 1,3,...]
 
 Never submits: the review stays pending until you submit it on GitHub. An
 existing pending review is added to, never replaced.
@@ -16,6 +16,8 @@ import re
 import subprocess
 import sys
 import tempfile
+
+from ui import choice, pause, reviewer
 
 STORE = os.environ.get("GHD_STORE") or os.path.expanduser("~/.local/share/gh-dash-reviews")
 EMOJI = {"bug": "🐛", "security": "🔒", "risk": "⚠️", "quality": "🧹", "design": "🎨", "completeness": "📋"}
@@ -148,25 +150,23 @@ def fzf(rows: list[str], *opts: str) -> list[str]:
     return [r for r in out.splitlines() if r.strip()]
 
 
-def pause(message: str) -> None:
-    print(message)
-    try:
-        input("\nPress enter to close...")
-    except EOFError:
-        pass
-
-
 def pick_review(repo: str, pr: str, review_path: str | None = None) -> tuple[str, dict] | None:
     reviews = saved_reviews(repo, pr)
     if review_path is not None:
         return next((r for r in reviews if os.path.realpath(r[0]) == os.path.realpath(review_path)), None)
     if len(reviews) < 2:
         return reviews[0] if reviews else None
-    rows = [f"{i}\t{m['at']}  {m['tool']:16}  {(m.get('title') or '')[:50]}\t{path[: -len('.findings')]}.md"
+    rows = [f"{i}\t{m['at']}  {reviewer(m):24}  {(m.get('title') or '')[:50]}\t{path[: -len('.findings')]}.md"
             for i, (path, m) in enumerate(reviews)]
     picked = fzf(rows, "--header=Choose the review to post from   enter: select   esc: cancel",
                  "--preview", "glow -s dark -w $FZF_PREVIEW_COLUMNS {3}", "--preview-window=right:55%")
     return reviews[int(picked[0].split("\t")[0])] if picked else None
+
+
+def picked_by_number(findings: list[dict], pick: str) -> list[dict]:
+    """Findings by their 1-based position in the saved review, as the review TUI numbers them."""
+    numbers = sorted({int(n) for n in pick.split(",") if n.strip()})
+    return [findings[n - 1] for n in numbers if 0 < n <= len(findings)]
 
 
 def pick_findings(findings: list[dict]) -> list[dict]:
@@ -198,6 +198,7 @@ def main(argv: list[str]) -> None:
     parser.add_argument("pr")
     parser.add_argument("--dry", action="store_true")
     parser.add_argument("--review", help="use this saved findings file without a review picker")
+    parser.add_argument("--pick", help="post these findings (1-based positions in the saved review) without the picker")
     args = parser.parse_args(argv)
     repo, pr, dry = args.repo, args.pr, args.dry
 
@@ -217,7 +218,7 @@ def main(argv: list[str]) -> None:
     for f in findings:
         f["placement"] = place(f, diff)
 
-    chosen = pick_findings(findings)
+    chosen = picked_by_number(findings, args.pick) if args.pick else pick_findings(findings)
     if not chosen:
         return
     threads = [f for f in chosen if f["placement"]["kind"] != "body"]
@@ -237,12 +238,12 @@ def main(argv: list[str]) -> None:
     view.append(f"{B}Comments ({len(threads)}){R}")
     for f in threads:
         view += [f"{DIM}{f['file']} {position(f['placement'])}{R}", comment_text(f), ""]
-    subprocess.run(["less", "-RFX"], input="\n".join(view) + "\n", text=True)
+    print("\n".join(view), flush=True)
 
     if not threads and not body:
         return pause("Nothing to post.")
-    if input(f"[s] post {len(threads)} comment(s) to the pending review   [c] cancel > ").strip().lower() != "s":
-        return pause("Cancelled, nothing posted.")
+    if choice(f"[s] post {len(threads)} comment(s) to the pending review   [c/esc/q] cancel > ", "sc\x1bq") != "s":
+        return
     if dry:
         return pause(json.dumps({"review": None if pending else {"pullRequestId": pull["id"], "commitOID": pull["headRefOid"], "body": body},
                                  "threads": [thread_input(f) for f in threads]}, indent=2, ensure_ascii=False))

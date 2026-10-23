@@ -13,6 +13,8 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
+from ui import reviewer
+
 STORE = os.environ.get("GHD_STORE") or os.path.expanduser("~/.local/share/gh-dash-reviews")
 LIB = os.path.dirname(os.path.realpath(__file__))
 
@@ -63,7 +65,7 @@ def main(argv: list[str]) -> None:
     with ThreadPoolExecutor(8) as pool:
         cur = dict(zip(keys, pool.map(current, keys)))
         states = list(pool.map(lambda m: status(m, cur[(m["repo"], m["pr"])]), metas))
-    rows = [f"{m['file']}\t{m['at']}  {m['repo']}#{m['pr']}  {m['tool']:16}  {duration(m):>7}  {(m.get('title') or '')[:55]:55}  {s}"
+    rows = [f"{m['file']}\t{m['at']}  {m['repo']}#{m['pr']}  {reviewer(m):24}  {duration(m):>7}  {(m.get('title') or '')[:55]:55}  {s}"
             for m, s in zip(metas, states)]
 
     picked = subprocess.run(

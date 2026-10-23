@@ -1,13 +1,19 @@
 #!/bin/zsh
-# Usage: ghd review <owner/repo> <pr> [opencode|claude]
+# Usage: ghd review <owner/repo> <pr> [pi [provider/model[:thinking]] | opencode | claude]
 #
 # Without a tool, shows the review menu. With one, checks the PR head out into
-# a throwaway detached worktree, runs the pr-review skill in it, and removes
-# the worktree when the agent exits. The agent only reads; this script owns
-# every git write.
+# a throwaway detached worktree, gathers the review packet, runs the pr-review
+# skill in it, and removes the worktree when the agent exits. The agent only
+# reads; this script owns every git write. pi is the harness the dashboard
+# uses; opencode and claude remain available from the shell.
 
 lib=${0:A:h}
 repo=$1 pr=$2 tool=$3
+case $tool in
+  pi) model=${4:-openai-codex/gpt-6.1-sol:high} ;;
+  claude) model=claude-opus-5-5 ;;
+  opencode) model='openai/gpt-6.1-sol#high' ;;
+esac
 
 if [[ -z $tool ]]; then
   if [[ -n $TMUX ]]; then
@@ -20,8 +26,8 @@ if [[ -z $tool ]]; then
     pick=$($lib/menu)
   fi
   case $pick in
-    GPT-*) exec $lib/open popup $lib/review $repo $pr opencode ;;
-    Opus*) exec $lib/open popup $lib/review $repo $pr claude ;;
+    GPT-*) exec $lib/open popup $lib/review $repo $pr pi openai-codex/gpt-6.1-sol:high ;;
+    Opus*) exec $lib/open popup $lib/review $repo $pr pi anthropic/claude-opus-5-5:high ;;
     Past*) exec $lib/open popup $lib/history.py $repo $pr ;;
     Post*) exec $lib/open popup $lib/post.py $repo $pr ;;
   esac
@@ -40,14 +46,14 @@ bell() {
 
 fail() {
   bell
-  [[ -n $out && ! -s $out.md ]] && rm -f $out.json
+  [[ -n $out && ! -s $out.md ]] && rm -f $out.json $out.findings $out.packet.md $out.progress
   print -u2 "$1"; print -u2 'Press any key...'; read -k 1; exit 1
 }
 
 IFS=$'\t' read -r title author head baseRef < <(gh pr view $pr --repo $repo \
   --json title,author,headRefOid,baseRefName -q '[.title, .author.login, .headRefOid, .baseRefName] | @tsv')
 [[ -n $head ]] || fail "Could not load $repo#$pr."
-printf '\n  \033[1;36m%s review\033[0m  %s#%s\n  %s  \033[2m(%s)\033[0m\n\n' $tool $repo $pr "$title" $author
+printf '\n  \033[1;36m%s review\033[0m  %s#%s\n  %s  \033[2m(%s)\033[0m\n\n' "$tool $model" $repo $pr "$title" $author
 
 store=${GHD_STORE:-$HOME/.local/share/gh-dash-reviews}
 mkdir -p $store
@@ -73,9 +79,11 @@ fi
 
 session=$(uuidgen | tr A-Z a-z)
 [[ $tool == opencode ]] && session=ses_ghd${session//-/}
-jq -n --arg repo $repo --argjson pr $pr --arg tool $tool --arg sha $head --arg title $title \
+jq -n --arg repo $repo --argjson pr $pr --arg tool $tool --arg model $model --arg sha $head --arg title $title \
   --arg at "$(date '+%Y-%m-%d %H:%M')" --arg session $session --arg cwd $PWD \
-  '{repo: $repo, pr: $pr, tool: $tool, sha: $sha, title: $title, at: $at, session: $session, cwd: $cwd}' > $out.json
+  '{repo: $repo, pr: $pr, tool: $tool, model: $model, sha: $sha, title: $title, at: $at, session: $session, cwd: $cwd}' > $out.json
+print '  Gathering the review packet...'
+python3 $lib/packet.py $repo $pr ${merge_base:-none} $head > $out.packet.md || fail "Could not gather the packet for $repo#$pr."
 
 brief="$repo#$pr
 base: $baseRef
@@ -84,6 +92,7 @@ head: $head
 review_file: $out.md
 findings_file: $out.findings
 check: ghd check $out.findings${merge_base:+ --head $head}
+packet: $out.packet.md
 tool: $tool"
 previous=($store/*__${repo//\//_}__${pr}__*.findings(N.On))
 if (( $#previous )); then
@@ -100,15 +109,26 @@ print '  Reviewing… scroll up for earlier output; q returns to live output. Ct
 SECONDS=0
 export GHD_PROGRESS=$out.progress
 case $tool in
+  pi)
+    export GHD_REVIEW=$out GHD_HEAD=$head GHD_MERGE_BASE=$merge_base GHD_MODEL=$model
+    skill=$(awk 'c >= 2 { print } /^---$/ { c++ }' $lib/../ai/skills/pr-review/SKILL.md)
+    pi_args=(-p --mode json --session-id $session --model $model
+      --tools 'read,bash,codemode,review_pass,save_finding,finish_review,mcp__atlassian__*' -e $lib/pi/review.ts
+      --append-system-prompt "$skill" --append-system-prompt $lib/pi/orchestrator.md -n "#$pr review" "$brief")
+    if [[ -t 1 ]]; then
+      $lib/tui $out -- pi "${pi_args[@]}"
+    else
+      python3 $lib/noninteractive.py python3 $lib/pi.py "${pi_args[@]}"
+    fi ;;
   claude)
     permissions=("Edit(/$out.md)" "Edit(/$out.findings)"
       'Bash(gh pr view *)' 'Bash(gh pr diff *)' 'Bash(gh api --method GET *)'
       'Bash(git diff *)' 'Bash(git log *)' 'Bash(git show *)' 'Bash(git status *)' 'Bash(ghd check *)'
       mcp__atlassian__getAccessibleAtlassianResources mcp__atlassian__getJiraIssue mcp__atlassian__searchJiraIssuesUsingJql)
-    python3 $lib/noninteractive.py python3 $lib/claude.py -p --model claude-opus-5-5 --setting-sources user --session-id $session \
+    python3 $lib/noninteractive.py python3 $lib/claude.py -p --model $model --setting-sources user --session-id $session \
       --mcp-config $lib/mcp.json --add-dir $store --allowedTools "${(j:,:)permissions}" \
       -n "#$pr review" "/pr-review $brief" ;;
-  opencode) python3 $lib/noninteractive.py opencode run --agent pr-review --model 'openai/gpt-6.1-sol#high' \
+  opencode) python3 $lib/noninteractive.py opencode run --agent pr-review --model $model \
     --session $session --title "#$pr review" "$brief" ;;
   *) fail "Unknown reviewer: $tool" ;;
 esac || fail "$tool review failed."

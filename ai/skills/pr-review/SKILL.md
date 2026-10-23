@@ -29,7 +29,7 @@ The brief from `ghd review` names the PR, `base`, `merge_base`, `head`, `review_
 
 ## Step 1 — Gather
 
-Gather once for the pinned window: exact changed paths and line counts, `gh pr view <pr> --repo <repo> --json title,body,headRefName`, `git log <merge_base>..<head>`, and the review threads already on the PR (`gh api --method GET repos/<repo>/pulls/<pr>/comments --paginate`). A point that already has a thread is not raised again; it goes in the Dropped table as `already on the PR`. Everything is committed; there is no staged, unstaged, or untracked review window.
+When the brief names `packet`, read that file first: `ghd review` gathered the window, PR text, commits, files, Jira keys, existing review threads and the full diff into it, so only gather what it lacks. Otherwise gather once for the pinned window: exact changed paths and line counts, `gh pr view <pr> --repo <repo> --json title,body,headRefName`, `git log <merge_base>..<head>`, and the review threads already on the PR (`gh api --method GET repos/<repo>/pulls/<pr>/comments --paginate`). A point that already has a thread is not raised again; it goes in the Dropped table as `already on the PR`. Everything is committed; there is no staged, unstaged, or untracked review window.
 
 When `.agents/skills/local-review/SKILL.md` exists, read its roster, exclusions, and Deep trigger, following its pointers for launch criteria. Apply those exclusions before reading the full reviewable diff. Otherwise read the full PR diff. Repository guidelines define what to inspect; this personal skill owns gathering, dispatch, verification, and output instead of running the repository's orchestration steps.
 

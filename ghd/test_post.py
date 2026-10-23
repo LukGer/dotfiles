@@ -116,3 +116,15 @@ def test_preselected(category, severity, expected):
 ])
 def test_review_body(tldr, folded, expected):
     assert post.review_body(tldr, folded) == expected
+
+
+@pytest.mark.parametrize("pick, titles", [
+    ("1,3", ["a", "c"]),
+    ("3,1,1", ["a", "c"]),
+    ("2", ["b"]),
+    ("0,9", []),
+    ("", []),
+])
+def test_picked_by_number(pick, titles):
+    findings = [{"title": "a"}, {"title": "b"}, {"title": "c"}]
+    assert [f["title"] for f in post.picked_by_number(findings, pick)] == titles

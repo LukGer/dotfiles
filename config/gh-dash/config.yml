@@ -32,11 +32,11 @@ keybindings:
       name: full info in new tab
       command: ghd open tab ghd info {{.RepoName}} {{.PrNumber}}
     - key: ctrl+g
-      name: Opus 5.5 review (Claude Code)
-      command: ghd open popup ghd review {{.RepoName}} {{.PrNumber}} claude
+      name: Opus 5.5 review (pi)
+      command: ghd open popup ghd review {{.RepoName}} {{.PrNumber}} pi anthropic/claude-opus-5-5:high
     - key: ctrl+t
-      name: GPT-6.1 Sol high review (OpenCode)
-      command: ghd open popup ghd review {{.RepoName}} {{.PrNumber}} opencode
+      name: GPT-6.1 Sol high review (pi)
+      command: ghd open popup ghd review {{.RepoName}} {{.PrNumber}} pi openai-codex/gpt-6.1-sol:high
     - key: f
       name: review menu
       command: tmux run-shell -b 'ghd review {{.RepoName}} {{.PrNumber}}'

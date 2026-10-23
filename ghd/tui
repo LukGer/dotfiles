@@ -1,0 +1,25 @@
+#!/bin/sh
+# Usage: ghd tui <review prefix> [-- command...]
+#
+# Builds the review screen in ghd/reviewtui once per source change, caches the
+# binary under ~/.cache/ghd like `ghd dash`, and runs it.
+set -eu
+
+lib=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+toolchain=go@1.27.1
+cache=${XDG_CACHE_HOME:-$HOME/.cache}/ghd
+source_hash=$(cat "$lib"/reviewtui/*.go "$lib"/reviewtui/go.mod "$lib"/reviewtui/go.sum | shasum -a 256 | cut -d ' ' -f 1)
+binary=$cache/reviewtui-$source_hash
+
+if [ ! -x "$binary" ]; then
+  mkdir -p "$cache"
+  echo "Building the review screen…" >&2
+  (
+    cd "$lib/reviewtui"
+    mise install "$toolchain"
+    mise exec "$toolchain" -- go build -trimpath -ldflags '-s -w' -o "$binary.tmp" .
+  )
+  mv "$binary.tmp" "$binary"
+fi
+
+GHD_LIB=$lib exec "$binary" "$@"

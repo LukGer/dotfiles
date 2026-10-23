@@ -21,8 +21,8 @@ ROOT = Path(__file__).resolve().parent.parent
                     reason="needs tmux, fzf and glow")
 @pytest.mark.parametrize("key, tool, paragraphs, action, response", [
     (b"\x1b", None, 0, None, None), (b"q", None, 0, None, None),
-    (b"1", "opencode", 1, b"p", b"no findings to post"),
-    (b"2", "claude", 80, b"c", b"CONVERSATION-READY"),
+    (b"1", "pi", 1, b"p", b"nothing selected"),
+    (b"2", "pi", 80, b"c", b"CONVERSATION-READY"),
 ])
 def test_review_menu_waits_for_selection_before_returning_to_dashboard(tmp_path, key, tool, paragraphs, action, response):
     tmux = ["tmux", "-L", f"ghd-test-{uuid.uuid4().hex}"]
@@ -35,10 +35,14 @@ args = sys.argv[1:]
 with open(os.environ['CALLS'], 'a') as f:
     f.write(json.dumps([name, *args]) + '\\n')
 if name == 'gh':
-    print('A review\\tauthor\\t1234567890\\tmain')
+    if args[:1] == ['api']:
+        pull = {'title': 'A review', 'body': '', 'user': {'login': 'author'}, 'head': {'ref': 'feature'}, 'base': {'ref': 'main'}}
+        print(json.dumps([pull] if next(a for a in args if a.startswith('repos/')).split('/')[-1].isdigit() else [[]]))
+    else:
+        print('A review\\tauthor\\t1234567890\\tmain')
 elif name == 'git':
     sys.exit(1)
-elif name in ('opencode', 'claude'):
+elif name in ('opencode', 'claude', 'pi'):
     if args[0] in ('--session', '--resume'):
         print('CONVERSATION-READY', flush=True)
         sys.exit(0)
@@ -57,9 +61,10 @@ elif name == 'glow':
     os.execv(os.environ['REAL_GLOW'], ['glow', *args])
 """)
     stub.chmod(0o755)
-    for name in ("osascript", "gh", "git", "opencode", "claude", "glow"):
+    for name in ("osascript", "gh", "git", "opencode", "claude", "pi", "glow"):
         (tmp_path / name).symlink_to(stub)
     env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "TERM": "xterm-256color",
+           "MISE_DATA_DIR": str(tmp_path / "mise"),  # zshenv puts mise's shims first; keep the stubbed pi ahead of the real one
            "CALLS": str(record), "GHD_STORE": str(tmp_path / "reviews"),
            "RELEASE_AGENT": str(tmp_path / "release"),
            "REAL_GLOW": shutil.which("glow"), "REVIEW_PARAGRAPHS": str(paragraphs),
@@ -87,7 +92,7 @@ elif name == 'glow':
         )
         output = b""
         deadline = time.monotonic() + 5
-        while not all(label in output for label in (b"GPT-6.1 Sol", b"OpenCode", b"Opus 5.5", b"Claude Code", b"Past reviews", b"Post to GitHub")):
+        while not all(label in output for label in (b"GPT-6.1 Sol", b"Opus 5.5", b"pi", b"Past reviews", b"Post to GitHub")):
             assert time.monotonic() < deadline, "menu did not draw all choices"
             if select.select([master], [], [], .05)[0]:
                 output += os.read(master, 65536)
@@ -106,43 +111,36 @@ elif name == 'glow':
                 output += os.read(master, 65536)
             assert b"ignored-input" not in output, "typing was echoed during the review"
             (tmp_path / "release").touch()
-            while b"REVIEW-READY" not in output:
-                assert time.monotonic() < deadline, "completed review was not shown in the popup"
+            deadline = time.monotonic() + 15
+            while b"p post" not in output:
+                assert time.monotonic() < deadline, f"the review screen did not open after the review: {output[-800:]!r}"
                 if select.select([master], [], [], .05)[0]:
                     output += os.read(master, 65536)
             assert b"\a" in output, "completion bell did not reach the outer terminal"
-            if select.select([master], [], [], .1)[0]:
-                output += os.read(master, 65536)
-            deadline = time.monotonic() + 5
-            while b"choose findings to post" not in output:
-                assert time.monotonic() < deadline, "review required paging or quitting before the posting prompt"
-                if select.select([master], [], [], .05)[0]:
-                    output += os.read(master, 65536)
-            assert b"REVIEW-END" in output, "review text should stay visible before choosing to post"
-            assert b"no findings to post" not in output, "queued typing chose to post"
+
+            def expect(text, failure):
+                nonlocal output
+                deadline = time.monotonic() + 10
+                while text not in output:
+                    assert time.monotonic() < deadline, f"{failure}: {output[-800:]!r}"
+                    if select.select([master], [], [], .05)[0]:
+                        output += os.read(master, 65536)
+
+            assert b"nothing selected" not in output, "queued typing chose to post"
             assert menu.poll() is None, "posting should remain a user choice"
-            os.write(master, b"x\n")
+            os.write(master, b"\t")
+            expect(b"REVIEW-READY", "tab did not show the review text")
+            os.write(master, b"\t")
             os.write(master, action)
             output = b""
-            deadline = time.monotonic() + 5
-            while response not in output:
-                assert time.monotonic() < deadline, "action required Enter after its shortcut"
-                if select.select([master], [], [], .05)[0]:
-                    output += os.read(master, 65536)
-            if action == b"p":
-                os.write(master, b"\n")
-                output = b""
-            while b"choose findings to post" not in output:
-                assert time.monotonic() < deadline, "action did not return to the review prompt"
-                if select.select([master], [], [], .05)[0]:
-                    output += os.read(master, 65536)
-            os.write(master, b"\x1b")
+            expect(response, "action required Enter after its shortcut")
+            expect(b"p post", "action did not return to the review screen")
+            os.write(master, b"q")
         stdout, stderr = menu.communicate(timeout=5)
         assert menu.returncode == 0, stderr.decode()
         if tool:
             calls = [json.loads(line) for line in record.read_text().splitlines()]
             assert any(name == tool for name, *_ in calls)
-            assert any(name == "glow" for name, *_ in calls)
             assert not any(name == "osascript" for name, *_ in calls)
         else:
             assert not record.exists()

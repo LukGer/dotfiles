@@ -6,7 +6,8 @@ Opus 5.5 review, and turn the findings you tick into a **pending** GitHub review
 
 The idea and most of the original scripts are Valentin's. This version uses
 Ghostty tabs for diffs and descriptions, an isolated tmux session for review
-popups, menus and pickers, and the `pr-review` skill for reviews.
+popups, menus and pickers, [pi](https://pi.dev) as the review harness around the
+`pr-review` skill, and a Bubble Tea review screen to watch, read and post.
 
 ## Start
 
@@ -27,7 +28,7 @@ viewers run in place.
 
 | Key | Action |
 | --- | --- |
-| `ctrl+g` / `ctrl+t` | Opus 5.5 (Claude Code) / GPT-6.1 Sol high (OpenCode) review in a popup in this window |
+| `ctrl+g` / `ctrl+t` | Opus 5.5 / GPT-6.1 Sol high review (both through pi) in a popup in this window |
 | `f` | Menu: models with their harnesses, past reviews of this PR, post |
 | `E` | Past reviews of every PR: `enter` reads one here, `ctrl-y` copies it |
 | `ctrl+o` | Post findings as a pending review |
@@ -84,68 +85,80 @@ change the release and toolchain in `dash` and rebase `gh-dash.patch`.
 
 ## Reviews
 
-`ghd review <owner/repo> <pr> [opencode|claude]` also works from any shell.
-The picker lists GPT-6.1 Sol (high thinking, OpenCode) first and Opus 5.5
-(Claude Code) second. Both launches pin the model explicitly.
+`ghd review <owner/repo> <pr> [pi [provider/model[:thinking]] | opencode | claude]`
+also works from any shell. The dashboard runs every review through pi; the
+picker lists GPT-6.1 Sol (high) first and Opus 5.5 (high) second, and both
+pin the model explicitly. `opencode` and `claude` remain available from the
+shell as single-pass reviewers on the same skill.
 
 1. Fetches the PR into your clone at `~/dev/<repo>` (`GHD_CODE_DIR` overrides
    `~/dev`) and checks its head out into a detached worktree under
    `~/.cache/ghd/`, with git hooks off. No clone means a diff-only review.
-2. Starts the agent there on the `pr-review` skill (`ai/skills/pr-review`). In
-   a repo with a `local-review` skill, this personal orchestrator uses the repo's
-   specialist guidelines and launch conditions against exactly the PR's diff.
-   It gathers shared context once, scopes parallel passes, and consolidates
-   verified findings without changing the repo's skills. Elsewhere it does one
-   generic pass. Claude starts
-   with `--setting-sources user`, so the PR cannot inject hooks or
-   permissions. Its headless run preapproves the GitHub reads, git inspection
-   commands, `ghd check`, Jira reads and writes to its two output files. Jira
-   comes from the Atlassian MCP server in `ghd/mcp.json`; authorise it once
-   with `claude --mcp-config ~/.dotfiles/ghd/mcp.json` and `/mcp`. OpenCode
-   runs as the `pr-review` agent (`config/opencode/agents/pr-review.md`),
-   which loads the same skill from `~/.agents/skills`.
+2. Gathers the **review packet** once with `ghd packet` (`packet.py`): the
+   window, PR text, commits, files, Jira keys, existing review threads and
+   the full diff, saved as `<review>.packet.md`. Every reviewer reads it
+   instead of re-gathering, and it flags changes to `AGENTS.md`, `CLAUDE.md`,
+   `.agents/`, `.claude/` or `.codex/` so the human knows the review
+   instructions moved.
+3. Starts the agent in the worktree on the `pr-review` skill
+   (`ai/skills/pr-review`). Under pi the skill body and `ghd/pi/orchestrator.md`
+   are the system prompt and `ghd/pi/review.ts` is loaded as an extension that
+   gives the orchestrator three tools:
+   - `review_pass` runs one specialist (`correctness`, `deep`, `security`,
+     `risk`, `quality`, `design`, `completeness`) in a separate read-only pi
+     session and returns its verified candidates. The orchestrator launches
+     every in-scope pass at once from one codemode script. In a repository
+     with `.agents/skills/local-review`, its roster, launch conditions and
+     Deep trigger apply and each pass runs on the repository's own review
+     skill (`bugs-review`, `risk-review`, ...) passed as `skill`; elsewhere the
+     generic checklists in `ghd/pi/specialists/` apply. `ghd/pi/specialist.md`
+     carries the harness rules every pass gets.
+   - `save_finding` records one verified finding and runs `ghd check` on it,
+     so a wrong anchor or line comes straight back to the model. Duplicates
+     of saved findings are rejected.
+   - `finish_review` takes the TLDR, dropped candidates, the since-last-review
+     table, which passes ran, and coverage gaps, writes the markdown and
+     findings files and ends the run.
+   A `tool_call` hook blocks `edit`, `write`, and git, GitHub, file and
+   install writes in `bash` for the orchestrator and every pass; blocked
+   commands fail closed with a reason. Jira comes from the Atlassian MCP
+   server that `install.sh` registers with pi; authorise it once with
+   `pi mcp login atlassian`. Without it the review records an access gap.
+   Claude starts with `--setting-sources user` and preapproved reads; OpenCode
+   runs as the `pr-review` agent (`config/opencode/agents/pr-review.md`).
    A second review of the same PR also receives the latest saved findings and
    their commit: the agent reports each earlier finding as fixed, open or
    dropped, skips points that already have a thread on the PR, and lists only
    open and new findings for posting.
-3. The agent writes a markdown review and a findings file to
-   `~/.local/share/gh-dash-reviews/` (`GHD_STORE` overrides). Each finding has
-   a category (`bug`, `security`, `risk`, `quality`, `design`, `completeness`)
-   and a severity (`P0`–`P3`, where `P3` is a nitpick). `ghd check <findings>
-   [--head <sha>]` validates a findings file, including each anchor against
-   the file at `head`; the agent runs it before saving and `ghd review` runs it
-   again, keeping an invalid file aside as `.findings.invalid`. A failed run
-   leaves no metadata behind.
-4. Claude Code and OpenCode run noninteractively in a popup in the dashboard window.
-    Typing is hidden and discarded while the agent runs; Ctrl+C cancels.
-    Claude's text streams as it is generated, with a summary of each tool call.
-    `claude.py` renders its `stream-json` events; plain `claude -p` only prints
-    the final response, leaving the live output blank during tool calls.
-    Three lines above the agent's output track the review: elapsed time, the
-    phase (gather, review with each specialist pass and whether it finished,
-    verify, write, check), tool calls so far, and which output files exist.
-    The harness reports this, not the agent: Claude Code through `PreToolUse`
-    and `PostToolUse` hooks declared in the skill's frontmatter, OpenCode
-    through the `ghd-progress` plugin (`ghd/progress-plugin.ts`, linked into
-    `~/.config/opencode/plugins/` by `install.sh`), which follows tool calls
-    of `ses_ghd…` sessions and their subagents. Both feed `ghd progress`,
-    which appends to `<review>.progress`.
-    Scroll up with the mouse or trackpad to inspect earlier live output without
-    interrupting the agent; `q` returns to live output. The review has its own
-    tmux scrollback, keeping up to 50,000 lines, removed when the agent exits.
-   When both files are saved, a bell sounds and the markdown opens automatically
-   in that popup, with keyboard input restored.
-   Reviews render directly in the popup and show the action prompt immediately,
-   without a pager to quit first.
-   Press `p` to choose findings from this exact review, `c` to
-   continue the conversation with the reviewer in its worktree (ask about a
-   finding, have it draft a fix, or save a follow-up with `ghd save`), or
-   Esc to return to the dashboard. These shortcuts respond immediately,
-   without an extra Enter. The worktree is removed when the popup
-   closes, so a review opened later from `E` can no longer be continued.
-   Failed runs or missing output pause with
-   an error until you press a key. Saved reviews from `E` use the same reader
-   and posting prompt.
+4. The findings file at `~/.local/share/gh-dash-reviews/` (`GHD_STORE`
+   overrides) holds the TLDR and findings, each with a category (`bug`,
+   `security`, `risk`, `quality`, `design`, `completeness`) and a severity
+   (`P0`–`P3`, where `P3` is a nitpick), plus the dropped candidates and
+   coverage. `ghd check <findings> [--head <sha>]` validates it, including
+   each anchor against the file at `head`; `ghd review` runs it again after
+   the agent and keeps an invalid file aside as `.findings.invalid`. A failed
+   run leaves no metadata behind.
+5. On a terminal the review runs inside the **review screen** (`ghd tui`, a
+   Bubble Tea program in `ghd/reviewtui/`, built once per source change and
+   cached under `~/.cache/ghd/`). While the agent runs it shows elapsed time,
+   cost, the phase, each specialist pass as it starts and finishes, findings
+   as they are saved, and the streamed transcript with one line per tool
+   call; scroll with the arrow keys, `G` follows again, Ctrl+C cancels. Typing
+   never reaches the agent. A bell sounds when the review is saved.
+   Off a terminal (scripts, tests) the agent streams through `pi.py` instead,
+   which also turns pi's silent provider errors into a failing exit status.
+6. The review screen then shows the findings: a list with checkboxes
+   (P0–P2 start ticked, nitpicks and completeness unticked) and, for the
+   selected finding, the exact comment that will be posted, the diff hunk at
+   head around its anchor, and the reviewer's evidence. `space` ticks, `a`
+   and `n` tick all or none, `e` edits the comment in `$EDITOR` and saves it
+   back into the findings file, `tab` switches to the full review markdown,
+   `p` posts the ticked findings through `ghd post --pick`, `c` continues the
+   conversation with the reviewer in its worktree (ask about a finding, have
+   it draft a fix, or save a follow-up with `ghd save`), and `q` returns to
+   the dashboard. The worktree is removed when the popup closes, so a review
+   opened later from `E` can no longer be continued. Saved reviews from `E`
+   open in the same screen.
 
 The alert uses the standard terminal bell (BEL). In tmux popups it is sent
 directly to the attached terminal because popup output does not forward bells.
@@ -154,9 +167,19 @@ Ghostty's `bell-features = system` setting plays the macOS alert sound.
 To save an additional review from a separate agent conversation, use
 `ghd save <repo> <pr> <tool> <markdown file> <findings file>`.
 
+### pi setup
+
+`config/mise/config.toml` pins `@earendil-works/pi-coding-agent` 1.4.0; run
+`mise install` after pulling. pi 1.x ships MCP, codemode and tool search as
+built-in extensions, so the `pi-mcp-adapter` package conflicts with it and
+`context-mode` needs its native module rebuilt for pi's Node; `pi remove` or
+reinstall them. `ghd review` starts pi with `--tools` restricted to `read`,
+`bash`, `codemode`, the three review tools and `mcp__atlassian__*`, so other
+personal extensions stay inactive during a review.
+
 ## Posting
 
-`ghd post <owner/repo> <pr> [--dry]`, or `ctrl+o`:
+`ghd post <owner/repo> <pr> [--dry] [--pick 1,3]`, or `ctrl+o`:
 
 1. Pick the review, then tick findings. P0–P2 start ticked; nitpicks and
    completeness start unticked. The preview shows the exact comment.
@@ -168,8 +191,9 @@ To save an additional review from a separate agent conversation, use
 4. An existing pending review is added to, never replaced. Submit it on GitHub.
 
 `--review <findings file>` skips the review picker and uses that saved review,
-checking that it belongs to the requested PR. The completion prompt supplies
-this automatically.
+checking that it belongs to the requested PR; `--pick` names the findings by
+their position in that file and skips the finding picker. The review screen
+supplies both.
 
 ## Files
 
@@ -180,24 +204,30 @@ this automatically.
 | `dash`, `gh-dash.patch` | cached gh-dash build with PR stack grouping and deployment details |
 | `deployment.py`, `test_deployment.py` | open active GitHub environments, with CLI tests for selection and failures |
 | `open` | Ghostty tabs and windows via AppleScript; tmux popups |
-| `review` | menu, worktree, agent launch, cleanup |
-| `noninteractive.py` | run the agent with stdin closed, suppress typing and restore terminal input |
+| `review` | menu, worktree, packet, agent launch, cleanup |
+| `packet.py`, `test_packet.py` | the review packet every reviewer reads |
+| `pi/review.ts`, `pi/lib.ts`, `pi/lib.test.ts` | pi extension: `review_pass`, `save_finding`, `finish_review`, the read-only guard, progress events; pure helpers tested with `node --test` |
+| `pi/orchestrator.md`, `pi/specialist.md`, `pi/specialists/` | system prompt additions for the orchestrator, every pass, and the generic specialist checklists |
+| `pi.py`, `test_pi.py` | stream pi's JSON events off a terminal and fail on provider errors |
+| `tui`, `reviewtui/` | the review screen: cached Go build, Bubble Tea program with its own `go test` suite |
+| `noninteractive.py` | run claude and opencode with stdin closed, suppress typing and restore terminal input |
 | `claude.py` | render Claude's streaming text and tool calls while preserving its exit status |
-| `progress.py`, `progress-plugin.ts` | live phase and specialist summary above the agent, from Claude hooks and the OpenCode plugin; `test_progress.py` covers both |
-| `view` | read a saved review here, post its findings, or continue its conversation |
-| `check.py` | findings validator shared by the agents and `review`; `test_check.py` covers it |
+| `progress.py`, `progress-plugin.ts` | progress events (`<review>.progress`) from Claude hooks and the OpenCode plugin, and the pane above those agents; the pi extension writes the same events itself; `test_progress.py` covers both |
+| `view` | open a saved review in the review screen, or print it off a terminal |
+| `check.py` | findings validator shared by the agents, `save_finding` and `review`; `test_check.py` covers it |
 | `mcp.json` | Atlassian MCP server for Claude's Jira reads |
 | `config/opencode/agents/pr-review.md` | the OpenCode agent `review` launches |
 | `menu` | compact chooser with number shortcuts and no search input |
-| `post.py` | finding picker and pending-review GraphQL; `test_post.py` covers placement |
+| `post.py` | finding picker, `--pick`, and pending-review GraphQL; `test_post.py` covers placement |
 | `history.py`, `save.py` | past reviews with their duration; ad-hoc saves |
 | `diff`, `pager`, `info` | diff and description viewers |
 | `config/gh-dash/config.yml` | sections and keys |
-| `install.sh` | links the OpenCode agent and progress plugin on `dot` runs |
+| `install.sh` | links the OpenCode agent and progress plugin and registers pi's Atlassian MCP server on `dot` runs |
 | `test_ui.py` | keybindings, menu actions, popup routing and automatic review completion |
 | `test_menu.py` | real tmux/fzf lifecycle: choose a reviewer, read the result and return here |
 
-Tests: `uv run --with pytest pytest ghd`.
+Tests: `uv run --with pytest pytest ghd` (includes the `node --test` run of the
+pi helpers) and `mise exec go@1.27.1 -- go test ./...` in `ghd/reviewtui`.
 
 The stack regression tests are included in `gh-dash.patch`. From the dotfiles
 root, apply it to a clean release and run gh-dash's Go tests:
