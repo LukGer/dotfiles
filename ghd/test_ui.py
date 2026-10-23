@@ -164,7 +164,8 @@ def test_review_finishes_without_an_interactive_agent_prompt(cli, tool, mode):
     assert mode in args
     assert args[args.index("--model") + 1] == MODELS[tool]
     if tool == "pi":
-        assert args[args.index("-e") + 1] == str(ROOT / "ghd/pi/review.ts")
+        loaded = [args[i + 1] for i, arg in enumerate(args) if arg == "-e"]
+        assert "--no-extensions" in args and loaded == ["builtin:codemode", "builtin:mcp", str(ROOT / "ghd/pi/review.ts")], "personal pi packages must not load"
         assert {"save_finding", "finish_review", "review_pass", "codemode"} <= set(args[args.index("--tools") + 1].split(","))
         assert "# PR review" in args[args.index("--append-system-prompt") + 1], "the skill body without its frontmatter"
         assert "---" not in args[args.index("--append-system-prompt") + 1].splitlines()[0]

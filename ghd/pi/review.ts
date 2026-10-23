@@ -5,7 +5,9 @@
 // both output files and ends the run) and review_pass (a specialist child pi
 // process reporting candidates through report_candidates). Every session is
 // read-only: a tool_call handler blocks edits and git, GitHub, file and
-// install writes. Progress events go straight to <review>.progress.
+// install writes. Progress events go straight to <review>.progress. Sessions
+// start with --no-extensions so personal pi packages never load; only the
+// codemode (and, for the orchestrator, mcp) built-ins are added back.
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -67,7 +69,8 @@ function runSpecialist(specialist: string, skill: string | undefined, prompt: st
   const dir = mkdtempSync(join(tmpdir(), "ghd-pass-"));
   const report = join(dir, "candidates.json");
   const guidelines = skill && existsSync(skill) ? skill : join(HERE, "specialists", `${specialist}.md`);
-  const args = ["-p", "--mode", "json", "--no-session", "--tools", "read,bash,codemode,report_candidates", "-e", join(HERE, "review.ts"),
+  const args = ["-p", "--mode", "json", "--no-session", "--tools", "read,bash,codemode,report_candidates",
+    "--no-extensions", "-e", "builtin:codemode", "-e", join(HERE, "review.ts"),
     "--append-system-prompt", join(HERE, "specialist.md"), "--append-system-prompt", guidelines,
     ...(MODEL ? ["--model", MODEL] : []), prompt];
   const invocation = piInvocation(args);

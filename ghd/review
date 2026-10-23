@@ -113,7 +113,8 @@ case $tool in
     export GHD_REVIEW=$out GHD_HEAD=$head GHD_MERGE_BASE=$merge_base GHD_MODEL=$model
     skill=$(awk 'c >= 2 { print } /^---$/ { c++ }' $lib/../ai/skills/pr-review/SKILL.md)
     pi_args=(-p --mode json --session-id $session --model $model
-      --tools 'read,bash,codemode,review_pass,save_finding,finish_review,mcp__atlassian__*' -e $lib/pi/review.ts
+      --tools 'read,bash,codemode,review_pass,save_finding,finish_review,mcp__atlassian__*'
+      --no-extensions -e builtin:codemode -e builtin:mcp -e $lib/pi/review.ts
       --append-system-prompt "$skill" --append-system-prompt $lib/pi/orchestrator.md -n "#$pr review" "$brief")
     if [[ -t 1 ]]; then
       $lib/tui $out -- pi "${pi_args[@]}"

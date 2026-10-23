@@ -170,12 +170,13 @@ To save an additional review from a separate agent conversation, use
 ### pi setup
 
 `config/mise/config.toml` pins `@earendil-works/pi-coding-agent` 1.4.0; run
-`mise install` after pulling. pi 1.x ships MCP, codemode and tool search as
-built-in extensions, so the `pi-mcp-adapter` package conflicts with it and
-`context-mode` needs its native module rebuilt for pi's Node; `pi remove` or
-reinstall them. `ghd review` starts pi with `--tools` restricted to `read`,
-`bash`, `codemode`, the three review tools and `mcp__atlassian__*`, so other
-personal extensions stay inactive during a review.
+`mise install` after pulling. `ghd review` starts pi with `--no-extensions`
+and adds back only the `codemode` and `mcp` built-ins plus `ghd/pi/review.ts`
+(specialist passes get `codemode` and the extension), so personal pi packages
+such as `pi-mcp-adapter` or `context-mode`, which do not load on pi 1.x,
+cannot break a review. `--tools` is restricted to `read`, `bash`, `codemode`,
+the review tools and `mcp__atlassian__*`. Skills, `AGENTS.md` and your
+`~/.pi/agent/auth.json` logins still apply.
 
 ## Posting
 
