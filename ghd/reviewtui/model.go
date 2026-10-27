@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 type mode int
@@ -82,6 +83,8 @@ type model struct {
 	width    int
 	height   int
 	exitCode int
+	dragging bool
+	dragGrab int
 }
 
 func newModel(out, lib string, command []string) (*model, error) {
@@ -164,6 +167,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.layout()
 	case tea.KeyMsg:
 		return m.key(msg)
+	case tea.MouseMsg:
+		m.mouse(msg)
 	case lineMsg:
 		event := Parse(string(msg))
 		switch {
@@ -362,8 +367,9 @@ func (m *model) layout() {
 		return
 	}
 	body := max(m.height-5, 3)
-	m.log = viewport.New(m.width-m.sideWidth()-2, body)
-	m.detail = viewport.New(m.width-m.listWidth()-2, body)
+	m.log = viewport.New(max(m.width-m.sideWidth()-3, 1), body)
+	m.detail = viewport.New(max(m.width-m.listWidth()-3, 1), body)
+	m.dragging = false
 	m.refreshLog()
 	if m.mode == reviewing {
 		m.renderDetail()
@@ -420,7 +426,7 @@ func (m *model) renderDetail() {
 		}
 		text = b.String()
 	}
-	m.detail.SetContent(text)
+	m.detail.SetContent(ansi.Wrap(text, m.detail.Width, ""))
 	m.detail.GotoTop()
 }
 
@@ -440,7 +446,7 @@ func (m *model) View() string {
 	if m.width == 0 {
 		return ""
 	}
-	header := bold.Render(fmt.Sprintf("%s#%d  %s", m.meta.Repo, m.meta.PR, m.meta.Title))
+	header := ansi.Truncate(bold.Render(fmt.Sprintf("%s#%d  %s", m.meta.Repo, m.meta.PR, m.meta.Title)), m.width, "…")
 	switch m.mode {
 	case running:
 		return m.runView(header)
@@ -470,8 +476,8 @@ func (m *model) runView(header string) string {
 		f := m.review.Findings[i]
 		side = append(side, lipgloss.NewStyle().Width(m.sideWidth()).Render(fmt.Sprintf("%s %s", f.Severity, f.Title)))
 	}
-	left := lipgloss.NewStyle().Width(m.sideWidth()).Height(m.log.Height).Render(strings.Join(side, "\n"))
-	right := border.Render(m.log.View())
+	left := lipgloss.NewStyle().Width(m.sideWidth()).MaxWidth(m.sideWidth()).Height(m.log.Height).MaxHeight(m.log.Height).Render(strings.Join(side, "\n"))
+	right := paneView(m.log)
 	footer := dim.Render("↑/↓ scroll · G follow · ctrl+c cancel")
 	return m.frame(header, info, lipgloss.JoinHorizontal(lipgloss.Top, left, right), footer)
 }
@@ -482,7 +488,7 @@ func (m *model) frame(header, info, body, footer string) string {
 	if m.meta.Instructions != "" {
 		instructions = lipgloss.NewStyle().MaxWidth(m.width).Render(accent.Render("Instructions: ") + dim.Render(strings.Join(strings.Fields(m.meta.Instructions), " ")))
 	}
-	return strings.Join([]string{header, dim.Render(info), instructions, body, footer}, "\n")
+	return strings.Join([]string{header, ansi.Truncate(dim.Render(info), m.width, "…"), instructions, body, ansi.Truncate(footer, m.width, "…")}, "\n")
 }
 
 func (m *model) phase() string {
@@ -507,7 +513,9 @@ func (m *model) phase() string {
 
 func (m *model) reviewView(header string) string {
 	var rows []string
-	for row, i := range m.order {
+	start := max(0, m.cursor-m.detail.Height+1)
+	for row := start; row < min(len(m.order), start+m.detail.Height); row++ {
+		i := m.order[row]
 		f := m.review.Findings[i]
 		box := "[ ]"
 		if m.selected[i] {
@@ -535,8 +543,8 @@ func (m *model) reviewView(header string) string {
 	}
 	info := fmt.Sprintf("%s %s  ·  %s  ·  %d of %d selected", m.meta.Tool, m.meta.Model, shortSHA(m.meta.SHA), picked, len(m.review.Findings))
 	left := lipgloss.NewStyle().Width(m.listWidth()).Height(m.detail.Height).Render(strings.Join(rows, "\n"))
-	right := border.Render(m.detail.View())
-	keys := "space select · a all · n none · e edit · p post · c continue · tab review/finding · q close"
+	right := paneView(m.detail)
+	keys := "q close · pgup/dn scroll · space select · a/n all/none · e edit · p post · c continue · tab review/finding"
 	footer := dim.Render(keys)
 	if m.status != "" {
 		footer = warn.Render(m.status) + "  " + footer

@@ -156,7 +156,10 @@ shell as single-pass reviewers on the same skill.
 6. The review screen then shows the findings: a list with checkboxes
    (P0–P2 start ticked, nitpicks and completeness unticked) and, for the
    selected finding, the exact comment that will be posted, the diff hunk at
-   head around its anchor, and the reviewer's evidence. `space` ticks, `a`
+   head around its anchor, and the reviewer's evidence. Up/Down chooses a
+   finding; the mouse wheel, Page Up/Page Down, or dragging the scrollbar
+   scrolls the right pane. Long paths, comments, code, and evidence wrap to
+   the pane width. `space` ticks, `a`
    and `n` tick all or none, `e` edits the comment in `$EDITOR` and saves it
    back into the findings file, `tab` switches to the full review markdown,
    `p` posts the ticked findings through `ghd post --pick`, `c` continues the
