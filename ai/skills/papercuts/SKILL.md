@@ -4,7 +4,9 @@ description: Triage and fix the friction agents logged in this repo's PAPERCUTS.
 disable-model-invocation: true
 ---
 
-Read `PAPERCUTS.md` at the repo root and work through it with the user. Never
+Read `PAPERCUTS.md` in the main worktree and work through it with the user. Resolve
+the main worktree from the first `worktree` entry in `git worktree list --porcelain`;
+the logger writes there even when invoked from a linked workspace. Never
 run this unprompted — agents log papercuts, the user decides when they get
 fixed.
 
@@ -32,6 +34,15 @@ Say so plainly in the report and leave the entry untouched. Don't file a ticket
 and don't bury it in won't-fix; the user decides what becomes an issue.
 
 **Won't fix** — real friction, not worth the change. Say why in one line.
+
+Distinguish a deliberate decision from an issue owned by an external tool or
+infrastructure. Record the owner and the useful workaround for external issues;
+being outside the repository is not itself a reason to dismiss a fix.
+
+Put recurring repository procedures in the relevant focused documentation and
+link it from the workflow that needs it. Put general agent-tool instructions in
+their global skill. Keep machine-specific setup out of shared repository files.
+Transient failures and command guesses do not need permanent documentation.
 
 ## Report, then act
 
