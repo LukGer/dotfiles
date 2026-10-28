@@ -67,7 +67,13 @@ to upgrade them too.
 | `git-nuke` | delete a branch locally and on origin; refuses the default branch |
 | `git-bclean` | delete local branches whose upstream is gone (`--force` to commit to it) |
 | `git-credit` | add a co-author trailer to the last commit |
-| `papercut` | log a small friction hit to `PAPERCUTS.md`; agents call it mid-task (see `ai/AGENTS.md`) |
+| `papercut` | log small friction to the shared `~/.papercuts/papercuts.sqlite`; agents call it mid-task (see `ai/AGENTS.md`) |
+
+Papercuts from all repositories and shells share one local SQLite database.
+`papercut list` shows open entries with their source paths; add `--all` to include
+won't-fix entries or `--json` for structured output. `/papercuts` guides triage.
+After fixing an entry, `papercut resolve <id>...` deletes it. Use
+`papercut dismiss <id>... --reason "..."` to record a won't-fix decision.
 
 ## Secrets
 

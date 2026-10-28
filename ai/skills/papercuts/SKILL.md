@@ -1,29 +1,31 @@
 ---
 name: papercuts
-description: Triage and fix the friction agents logged in this repo's PAPERCUTS.md.
+description: Triage and fix friction from the shared papercut database.
 disable-model-invocation: true
 ---
 
-Read `PAPERCUTS.md` in the main worktree and work through it with the user. Resolve
-the main worktree from the first `worktree` entry in `git worktree list --porcelain`;
-the logger writes there even when invoked from a linked workspace. Never
+Run `papercut list --all --json` and work through the entries with the user. Never
 run this unprompted — agents log papercuts, the user decides when they get
 fixed.
 
 ## Scope
 
-Only this repo's `PAPERCUTS.md`. Papercuts logged outside a repo land in
-`~/.papercuts/<dir>.md` — don't act on those, but count their entries and
-mention the total at the end so they don't rot unseen.
+All instances share `~/.papercuts/papercuts.sqlite`. The list includes entries
+from every repository and from outside Git. Use each entry's `directory` to
+locate the source; `repository` identifies its shared Git directory across
+worktrees. The current checkout may be unrelated.
+If `directory` no longer exists, use `git --git-dir <repository> worktree list`
+to find a surviving checkout. Report entries whose source is unavailable and
+leave them open.
 
-Entries below a `## Won't fix` heading are settled. Skip them during triage.
-If a new entry restates one of them, merge it into the settled entry (append a
-`(hit again YYYY-MM-DD)` note) rather than triaging it again.
+Entries with status `dismissed` are settled. Skip them during triage.
+If an open entry restates one of them, propose dismissing the recurrence with
+a reason referencing the settled entry's ID rather than triaging it again.
 
 ## Triage
 
-Group the open entries by underlying cause, not by wording — five entries about
-five wrong commands in `AGENTS.md` are one fix. Then sort each group into:
+Group open entries by source and underlying cause, not by wording — five entries
+about five wrong commands in `AGENTS.md` are one fix. Then sort each group into:
 
 **Fix now** — stale docs, a command that no longer exists, a wrong path, a
 missing script, an undocumented setup step, a gotcha worth a line in
@@ -47,17 +49,19 @@ Transient failures and command guesses do not need permanent documentation.
 ## Report, then act
 
 Present the grouped plan and wait for approval. For each group: the fix, the
-files it touches, and how many entries it closes. Don't edit anything before
-the user approves — a papercut about a misleading error can otherwise turn into
-an unreviewed change to shared `AGENTS.md` that the whole team inherits.
+source repository or directory, files it touches, and entry IDs it closes.
+Don't edit anything before the user approves — a papercut about a misleading
+error can otherwise turn into an unreviewed change to shared `AGENTS.md` that
+the whole team inherits.
 
 After approval:
 
 - Apply the approved fixes.
-- Delete the entries they close. There is no archive — a fixed papercut is gone,
-  and that's deliberate.
-- Move won't-fix entries under `## Won't fix` (create it at the bottom of the
-  file if absent) with the one-line reason appended.
-- Leave real-bug entries exactly where they are.
+- Run `papercut resolve <id>...` for entries they close. There is no archive —
+  a fixed papercut is gone, and that's deliberate.
+- Run `papercut dismiss <id>... --reason "..."` for won't-fix entries.
+- Leave real-bug entries open.
+
+Use the CLI for database changes. `papercut --help` lists commands.
 
 Don't commit unless asked.
