@@ -16,7 +16,6 @@ path=(
   "$DOTFILES/bin"
   "${MISE_DATA_DIR:-$HOME/.local/share/mise}/shims"
   "$BUN_INSTALL/bin"
-  "$HOME/.opencode/bin"
   "$HOME/.local/bin"          # uv installs here; replaces `. ~/.local/bin/env`
   /opt/homebrew/bin
   /opt/homebrew/sbin
