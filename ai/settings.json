@@ -6,7 +6,7 @@
   "effortLevel": "high",
   "tui": "default",
   "skipDangerousModePermissionPrompt": true,
-  "skipWorkflowUsageWarning": true,
   "inputNeededNotifEnabled": true,
-  "agentPushNotifEnabled": false
+  "agentPushNotifEnabled": false,
+  "skipWorkflowUsageWarning": true
 }
