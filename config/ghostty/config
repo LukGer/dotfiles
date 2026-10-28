@@ -9,6 +9,8 @@
 # Note: if you ever change a setting through the Ghostty GUI it writes to the
 # Application Support path, which would start the double-loading again.
 
+auto-update-channel = tip
+
 theme = Catppuccin Mocha
 font-family = CaskaydiaCove Nerd Font
 
