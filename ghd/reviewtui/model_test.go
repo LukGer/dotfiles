@@ -75,12 +75,68 @@ func TestPostPassesTheSelectedPositions(t *testing.T) {
 	m := savedReview(t, Meta{Repo: "o/r", PR: 7, Tool: "pi"}, findings)
 	cmd, _ := m.postCommand()
 	joined := strings.Join(cmd.Args, " ")
-	if cmd.Args[1] != "/lib/post.py" || !strings.Contains(joined, "o/r 7 --review") || !strings.HasSuffix(joined, "--pick 2,3") {
+	if cmd.Args[1] != "/lib/post.py" || !strings.Contains(joined, "o/r 7 --json --review") || !strings.HasSuffix(joined, "--pick 2,3") {
 		t.Fatalf("got %v", cmd.Args)
 	}
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
 	if cmd, status := m.postCommand(); cmd != nil || status != "nothing selected" {
 		t.Fatalf("expected nothing selected, got %q", status)
+	}
+}
+
+func TestPostStaysInTheReviewScreen(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		t.Run(fmt.Sprint(fail), func(t *testing.T) {
+			m := savedReview(t, Meta{Repo: "o/r", PR: 7}, []Finding{{Severity: "P1", Category: "bug"}})
+			m.lib = t.TempDir()
+			positions := "[1]"
+			if fail {
+				positions = "[]"
+			}
+			script := "import sys\nassert sys.stdin.read() == ''\nprint('{\"message\": \"Result from Python\", \"posted\": " + positions + "}')\n"
+			if fail {
+				script += "sys.exit(1)\n"
+			}
+			os.WriteFile(filepath.Join(m.lib, "post.py"), []byte(script), 0o600)
+			_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+			if cmd == nil || !strings.Contains(m.View(), "Posting") {
+				t.Fatal("post did not start inside the review screen")
+			}
+			if _, duplicate := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}}); duplicate != nil {
+				t.Fatal("posting twice started a duplicate request")
+			}
+			m.Update(cmd())
+			if !strings.Contains(m.View(), "Result from Python") {
+				t.Fatalf("post result is missing: %s", m.View())
+			}
+			if got := Picks(m.selected); (got != "") != fail {
+				t.Fatalf("selection after posting: %q", got)
+			}
+			m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+			if m.mode != reviewing {
+				t.Fatal("enter did not return to findings")
+			}
+		})
+	}
+}
+
+func TestPartialPostKeepsOnlyUnpostedFindingsSelected(t *testing.T) {
+	m := savedReview(t, Meta{}, []Finding{
+		{Severity: "P1", Category: "bug"},
+		{Severity: "P1", Category: "bug"},
+		{Severity: "P1", Category: "bug"},
+	})
+	m.Update(postDoneMsg{output: "One thread failed", posted: []int{1, 3}, err: fmt.Errorf("exit status 1")})
+	if got := Picks(m.selected); got != "2" {
+		t.Fatalf("partial post left %q selected", got)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
+	if !strings.Contains(m.View(), "One thread failed") {
+		t.Fatal("resizing lost the posting report")
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if m.detail.Width != m.width-m.listWidth()-3 {
+		t.Fatal("returning to findings did not restore the detail pane width")
 	}
 }
 

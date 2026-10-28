@@ -24,6 +24,8 @@ const (
 	running mode = iota
 	failed
 	reviewing
+	posting
+	postResult
 )
 
 type pass struct {
@@ -40,6 +42,11 @@ type (
 		err  error
 	}
 	actionDoneMsg struct{ err error }
+	postDoneMsg   struct {
+		output string
+		posted []int
+		err    error
+	}
 )
 
 var (
@@ -72,19 +79,21 @@ type model struct {
 	exitErr    string
 
 	// reviewing
-	review   Review
-	order    []int
-	cursor   int
-	selected map[int]bool
-	detail   viewport.Model
-	showMD   bool
-	files    map[string][][]DiffLine
-	status   string
-	width    int
-	height   int
-	exitCode int
-	dragging bool
-	dragGrab int
+	review     Review
+	order      []int
+	cursor     int
+	selected   map[int]bool
+	detail     viewport.Model
+	showMD     bool
+	dry        bool
+	postOutput string
+	files      map[string][][]DiffLine
+	status     string
+	width      int
+	height     int
+	exitCode   int
+	dragging   bool
+	dragGrab   int
 }
 
 func newModel(out, lib string, command []string) (*model, error) {
@@ -225,6 +234,16 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.cmd == nil || m.mode == reviewing {
 			m.loadReview()
 		}
+	case postDoneMsg:
+		m.mode = postResult
+		m.postOutput = strings.TrimSpace(msg.output)
+		if msg.err != nil {
+			m.postOutput += "\n\nPosting failed: " + msg.err.Error()
+		}
+		for _, position := range msg.posted {
+			m.selected[position-1] = false
+		}
+		m.renderPostResult()
 	}
 	return m, nil
 }
@@ -252,6 +271,18 @@ func (m *model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case failed:
 		return m, tea.Quit
+	case posting:
+		return m, nil
+	case postResult:
+		switch k {
+		case "enter", "esc":
+			m.mode = reviewing
+			m.layout()
+		case "q", "ctrl+c":
+			return m, tea.Quit
+		default:
+			m.detail, _ = m.detail.Update(msg)
+		}
 	case reviewing:
 		switch k {
 		case "q", "esc", "ctrl+c":
@@ -261,6 +292,9 @@ func (m *model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "k", "up":
 			m.move(-1)
 		case " ":
+			if len(m.order) == 0 {
+				return m, nil
+			}
 			i := m.order[m.cursor]
 			m.selected[i] = !m.selected[i]
 		case "a":
@@ -317,7 +351,28 @@ func (m *model) edit() tea.Cmd {
 	return tea.ExecProcess(cmd, func(err error) tea.Msg { return editDoneMsg{file.Name(), err} })
 }
 
-func (m *model) post() tea.Cmd { return m.run(m.postCommand()) }
+func (m *model) post() tea.Cmd {
+	cmd, status := m.postCommand()
+	if cmd == nil {
+		m.status = status
+		return nil
+	}
+	m.mode, m.status = posting, ""
+	return func() tea.Msg {
+		output, err := cmd.CombinedOutput()
+		var report struct {
+			Message string `json:"message"`
+			Posted  []int  `json:"posted"`
+		}
+		if decodeErr := json.Unmarshal(output, &report); decodeErr != nil {
+			if err == nil {
+				err = fmt.Errorf("invalid posting report: %w", decodeErr)
+			}
+			return postDoneMsg{output: string(output), err: err}
+		}
+		return postDoneMsg{report.Message, report.Posted, err}
+	}
+}
 
 func (m *model) resume() tea.Cmd { return m.run(m.resumeCommand()) }
 
@@ -336,7 +391,11 @@ func (m *model) postCommand() (*exec.Cmd, string) {
 	if picks == "" {
 		return nil, "nothing selected"
 	}
-	return exec.Command("python3", filepath.Join(m.lib, "post.py"), m.meta.Repo, fmt.Sprint(m.meta.PR), "--review", m.out+".findings", "--pick", picks), ""
+	cmd := exec.Command("python3", filepath.Join(m.lib, "post.py"), m.meta.Repo, fmt.Sprint(m.meta.PR), "--json", "--review", m.out+".findings", "--pick", picks)
+	if m.dry {
+		cmd.Args = append(cmd.Args, "--dry")
+	}
+	return cmd, ""
 }
 
 // resumeCommand reopens the reviewer's conversation in its worktree.
@@ -373,7 +432,14 @@ func (m *model) layout() {
 	m.refreshLog()
 	if m.mode == reviewing {
 		m.renderDetail()
+	} else if m.mode == postResult {
+		m.renderPostResult()
 	}
+}
+
+func (m *model) renderPostResult() {
+	m.detail = viewport.New(max(m.width-3, 1), max(m.height-5, 3))
+	m.detail.SetContent(ansi.Wrap(m.postOutput, m.detail.Width, ""))
 }
 
 func (m *model) sideWidth() int { return min(36, m.width/3) }
@@ -452,6 +518,10 @@ func (m *model) View() string {
 		return m.runView(header)
 	case failed:
 		return header + "\n\n" + bad.Render("Review failed") + "\n\n" + m.exitErr + "\n\n" + dim.Render("press any key")
+	case posting:
+		return m.frame(header, "Posting selected findings…", "", dim.Render("Adding comments to your pending GitHub review…"))
+	case postResult:
+		return m.frame(header, "Posting result", paneView(m.detail), dim.Render("↑/↓/pgup/pgdn scroll · enter/esc findings · q close"))
 	}
 	return m.reviewView(header)
 }

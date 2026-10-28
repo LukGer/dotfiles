@@ -1,25 +1,28 @@
+import json
+from pathlib import Path
+import subprocess
 import sys
-import termios
-import tty
+import tempfile
 
 
-def choice(prompt: str, keys: str) -> str:
-    terminal = sys.stdin.isatty()
-    original = termios.tcgetattr(sys.stdin) if terminal else None
-    try:
-        if terminal:
-            tty.setcbreak(sys.stdin, termios.TCSANOW)
-        print(prompt, end="", flush=True)
-        while True:
-            key = sys.stdin.read(1).lower()
-            if not key or key == "\x04" or key in keys:
-                print()
-                return "" if key == "\x04" else key
-    except KeyboardInterrupt:
-        raise SystemExit(130)
-    finally:
-        if terminal:
-            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, original)
+LIB = Path(__file__).resolve().parent
+
+
+def screen(request: dict) -> dict | None:
+    with tempfile.TemporaryDirectory(prefix="ghd-screen-") as directory:
+        source, result = Path(directory) / "request.json", Path(directory) / "result.json"
+        source.write_text(json.dumps(request))
+        subprocess.run([str(LIB / "tui"), "screen", str(source), str(result)], check=True)
+        return json.loads(result.read_text()) if result.exists() else None
+
+
+def choose(title: str, items: list[dict], *, copy: bool = False) -> int | None:
+    result = screen({"title": title, "items": items, "copy": copy})
+    return result["index"] if result is not None else None
+
+
+def review_screen(prefix: str, *, dry: bool = False) -> None:
+    subprocess.run([str(LIB / "tui"), prefix, *(["--dry"] if dry else [])], check=True)
 
 
 def reviewer(meta: dict) -> str:
@@ -29,5 +32,7 @@ def reviewer(meta: dict) -> str:
 
 
 def pause(message: str) -> None:
-    print(message)
-    choice("\n[enter/esc/q] close > ", "\r\n\x1bq")
+    if sys.stdin.isatty() and sys.stdout.isatty():
+        screen({"title": "ghd", "message": message})
+    else:
+        print(message)

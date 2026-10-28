@@ -18,7 +18,7 @@ ghd
 Runs gh-dash in the terminal where you invoke it, inside its own tmux server
 (`-L ghd`) with no status bar or personal tmux configuration. Quitting returns
 to your existing shell prompt, preserving your configuration and working directory.
-Needs `jq` (ships with macOS), `gh`, `tmux` 3.3+, `fzf`, `glow`, `delta` and
+Needs `jq` (ships with macOS), `gh`, `tmux` 3.3+, `glow`, `delta` and
 `mise`, which `script/install` provides. Opening diffs and
 descriptions in Ghostty tabs needs Ghostty 1.3+ (AppleScript); the first such
 action asks whether your shell may control Ghostty. In other terminals these
@@ -73,7 +73,7 @@ the latest 100 deployments per commit, including the PR's actual or test merge
 commit when GitHub provides one.
 
 Press `O` to open the latest active deployment's environment URL. With multiple
-environments, choose one with `fzf`; Escape returns to the dashboard. The
+environments, choose one in the Bubble Tea picker; Escape returns to the dashboard. The
 command also works as `ghd deployment <owner/repo> <pr>`. It pages through
 all PR commits and identifies deployments serving an earlier commit, including
 when a newer deployment is still building. Missing URLs, inactive deployments
@@ -162,7 +162,11 @@ shell as single-pass reviewers on the same skill.
    the pane width. `space` ticks, `a`
    and `n` tick all or none, `e` edits the comment in `$EDITOR` and saves it
    back into the findings file, `tab` switches to the full review markdown,
-   `p` posts the ticked findings through `ghd post --pick`, `c` continues the
+   `p` immediately posts the ticked findings to your pending GitHub review.
+   Progress and a scrollable result stay in the review screen; Enter returns
+   to the findings. Posted findings are unticked, including after a partial
+   failure, so a retry only includes findings that were not posted.
+   `c` continues the
    conversation with the reviewer in its worktree (ask about a finding, have
    it draft a fix, or save a follow-up with `ghd save`), and `q` returns to
    the dashboard. The worktree is removed when the popup closes, so a review
@@ -196,14 +200,19 @@ the review tools and `mcp__atlassian__*`. Skills, `AGENTS.md` and your
 2. Each line is checked against the live PR diff and moved by its anchor text
    when the PR changed. A finding that cannot be placed becomes a whole-file
    comment, or a line in the review body when its file is not in the diff.
-3. Confirm with `s`. Comments read `🐛 <comment>`, with `nit:` on P3s, and end
+3. Press `p` to post. Comments read `🐛 <comment>`, with `nit:` on P3s, and end
    with `(added by AI)`. A new review gets the agent's TLDR as its body.
 4. An existing pending review is added to, never replaced. Submit it on GitHub.
 
 `--review <findings file>` skips the review picker and uses that saved review,
 checking that it belongs to the requested PR; `--pick` names the findings by
-their position in that file and skips the finding picker. The review screen
-supplies both.
+their position in that file and posts immediately without interaction. The
+review screen supplies both. `--dry` shows the payload without posting.
+
+Saved-review and deployment pickers, previews, filtering (`/`), clipboard
+copying (`ctrl+y` in history), and message screens all run in Bubble Tea.
+Python handles fetching and posting data. `--json` returns a posting report
+with its message and the 1-based positions that were successfully posted.
 
 ## Files
 
@@ -219,7 +228,7 @@ supplies both.
 | `pi/review.ts`, `pi/lib.ts`, `pi/lib.test.ts` | pi extension: `review_pass`, `save_finding`, `finish_review`, the read-only guard, progress events; pure helpers tested with `node --test` |
 | `pi/orchestrator.md`, `pi/specialist.md`, `pi/specialists/` | system prompt additions for the orchestrator, every pass, and the generic specialist checklists |
 | `pi.py`, `test_pi.py` | stream pi's JSON events off a terminal and fail on provider errors |
-| `tui`, `reviewtui/` | the review menu and review screen: cached Go build, Bubble Tea program with its own `go test` suite |
+| `tui`, `reviewtui/` | menus, pickers, message and review screens: cached Go build, Bubble Tea program with its own `go test` suite |
 | `noninteractive.py` | run claude and opencode with stdin closed, suppress typing and restore terminal input |
 | `claude.py` | render Claude's streaming text and tool calls while preserving its exit status |
 | `progress.py`, `progress-plugin.ts` | progress events (`<review>.progress`) from Claude hooks and the OpenCode plugin, and the pane above those agents; the pi extension writes the same events itself; `test_progress.py` covers both |
@@ -227,7 +236,7 @@ supplies both.
 | `check.py` | findings validator shared by the agents, `save_finding` and `review`; `test_check.py` covers it |
 | `mcp.json` | Atlassian MCP server for Claude's Jira reads |
 | `config/opencode/agents/pr-review.md` | the OpenCode agent `review` launches |
-| `post.py` | finding picker, `--pick`, and pending-review GraphQL; `test_post.py` covers placement |
+| `post.py` | saved-review dispatch, noninteractive posting, and pending-review GraphQL; `test_post.py` covers posting and placement |
 | `history.py`, `save.py` | past reviews with their duration; ad-hoc saves |
 | `diff`, `pager`, `info` | diff and description viewers |
 | `config/gh-dash/config.yml` | sections and keys |

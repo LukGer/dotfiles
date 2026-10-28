@@ -15,14 +15,12 @@ import os
 import re
 import subprocess
 import sys
-import tempfile
 
-from ui import choice, pause, reviewer
+from ui import choose, pause, reviewer, review_screen
 
 STORE = os.environ.get("GHD_STORE") or os.path.expanduser("~/.local/share/gh-dash-reviews")
 EMOJI = {"bug": "🐛", "security": "🔒", "risk": "⚠️", "quality": "🧹", "design": "🎨", "completeness": "📋"}
 AI_SUFFIX = "(added by AI)"
-SEVERITIES = ["P0", "P1", "P2", "P3"]
 
 
 def parse_patch(patch: str) -> dict[int, tuple[int, str]]:
@@ -70,10 +68,6 @@ def place(finding: dict, diff: dict[str, dict[int, tuple[int, str]]]) -> dict:
 def comment_text(finding: dict) -> str:
     nit = "nit: " if finding["severity"] == "P3" else ""
     return f"{EMOJI.get(finding['category'], '•')} {nit}{finding['comment']}\n\n{AI_SUFFIX}"
-
-
-def preselected(finding: dict) -> bool:
-    return finding["severity"] != "P3" and finding["category"] != "completeness"
 
 
 def review_body(tldr: str, folded: list[dict]) -> str:
@@ -144,23 +138,17 @@ def saved_reviews(repo: str, pr: str) -> list[tuple[str, dict]]:
     return found
 
 
-def fzf(rows: list[str], *opts: str) -> list[str]:
-    out = subprocess.run(["fzf", "--delimiter=\t", "--with-nth=2", "--no-sort", *opts],
-                         input="\n".join(rows), stdout=subprocess.PIPE, text=True).stdout
-    return [r for r in out.splitlines() if r.strip()]
-
-
 def pick_review(repo: str, pr: str, review_path: str | None = None) -> tuple[str, dict] | None:
     reviews = saved_reviews(repo, pr)
     if review_path is not None:
         return next((r for r in reviews if os.path.realpath(r[0]) == os.path.realpath(review_path)), None)
     if len(reviews) < 2:
         return reviews[0] if reviews else None
-    rows = [f"{i}\t{m['at']}  {reviewer(m):24}  {(m.get('title') or '')[:50]}\t{path[: -len('.findings')]}.md"
-            for i, (path, m) in enumerate(reviews)]
-    picked = fzf(rows, "--header=Choose the review to post from   enter: select   esc: cancel",
-                 "--preview", "glow -s dark -w $FZF_PREVIEW_COLUMNS {3}", "--preview-window=right:55%")
-    return reviews[int(picked[0].split("\t")[0])] if picked else None
+    items = [{"label": f"{m['at']}  {reviewer(m):24}  {m.get('title') or ''}",
+              "preview_file": path.removesuffix(".findings") + ".md"}
+             for path, m in reviews]
+    picked = choose("Choose the review to post from", items)
+    return reviews[picked] if picked is not None else None
 
 
 def picked_by_number(findings: list[dict], pick: str) -> list[dict]:
@@ -169,47 +157,39 @@ def picked_by_number(findings: list[dict], pick: str) -> list[dict]:
     return [findings[n - 1] for n in numbers if 0 < n <= len(findings)]
 
 
-def pick_findings(findings: list[dict]) -> list[dict]:
-    order = sorted(range(len(findings)), key=lambda i: SEVERITIES.index(findings[i]["severity"]))
-    rows, previews = [], {}
-    for i in order:
-        f, p = findings[i], findings[i]["placement"]
-        tag = {"line": "", "file": "  [file comment]", "body": "  [review body]"}[p["kind"]]
-        note = f"  [{p['note']}]" if p["note"] else ""
-        rows.append(f"{i}\t{EMOJI.get(f['category'], '•')} {f['severity']} {f['category']:12} {f['file']}:{f['line']}  {f['title']}{tag}{note}")
-        previews[i] = f"**{f['severity']} {f['category']}** `{f['file']}:{f['line']}`\n\n### {f['title']}\n\n{comment_text(f)}\n\n---\n\n{f.get('detail', '')}"
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tmp:
-        json.dump({str(k): v for k, v in previews.items()}, tmp)
-    ticks = "+".join(f"pos({row + 1})+select" for row, i in enumerate(order) if preselected(findings[i]))
-    try:
-        picked = fzf(rows, "--multi", "--ansi", "--marker=✔ ", "--pointer=▶",
-                     f"--bind=load:{ticks}+first" if ticks else "--bind=load:first",
-                     "--header=tab: include/exclude   enter: review & confirm   esc: cancel",
-                     "--preview", f"jq -r '.[\"{{1}}\"]' {tmp.name} | glow -s dark -w $FZF_PREVIEW_COLUMNS -",
-                     "--preview-window=right:55%")
-    finally:
-        os.unlink(tmp.name)
-    return [findings[int(r.split("\t")[0])] for r in picked]
-
-
 def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("repo")
     parser.add_argument("pr")
     parser.add_argument("--dry", action="store_true")
+    parser.add_argument("--json", action="store_true", help="return the posting report and posted finding positions as JSON")
     parser.add_argument("--review", help="use this saved findings file without a review picker")
     parser.add_argument("--pick", help="post these findings (1-based positions in the saved review) without the picker")
     args = parser.parse_args(argv)
     repo, pr, dry = args.repo, args.pr, args.dry
 
+    def report(message: str, posted: list[int] | None = None) -> None:
+        print(json.dumps({"message": message, "posted": posted or []}, ensure_ascii=False) if args.json else message)
+
+    show_message = pause if args.pick is None else report
+
     picked_review = pick_review(repo, pr, args.review)
     if not picked_review:
-        return pause(f"No saved review with findings for {repo}#{pr}. Run one first (ctrl+g / ctrl+t).")
+        if args.review is None and saved_reviews(repo, pr):
+            return
+        return show_message(f"No saved review with findings for {repo}#{pr}. Run one first (ctrl+g / ctrl+t).")
     path, meta = picked_review
     data = json.load(open(path))
     findings = data.get("findings", [])
     if not findings:
-        return pause("The saved review has no findings to post.")
+        return show_message("The saved review has no findings to post.")
+
+    if args.pick is None:
+        return review_screen(path.removesuffix(".findings"), dry=dry)
+
+    chosen = picked_by_number(findings, args.pick)
+    if not chosen:
+        return report("Nothing selected.")
 
     owner, name = repo.split("/")
     pull = graphql(PR_QUERY, owner=owner, name=name, number=int(pr))["repository"]["pullRequest"]
@@ -218,49 +198,49 @@ def main(argv: list[str]) -> None:
     for f in findings:
         f["placement"] = place(f, diff)
 
-    chosen = picked_by_number(findings, args.pick) if args.pick else pick_findings(findings)
-    if not chosen:
-        return
     threads = [f for f in chosen if f["placement"]["kind"] != "body"]
     folded = [f for f in chosen if f["placement"]["kind"] == "body"]
     body = "" if pending else review_body(data.get("tldr", ""), folded)
 
-    B, DIM, YELLOW, R = "\033[1m", "\033[2m", "\033[33m", "\033[0m"
-    view = [f"{B}{'Add to your pending review' if pending else 'New pending review'} on {repo}#{pr}{R}",
-            f"{DIM}Only you can see it until you submit it on GitHub.{R}\n"]
+    notes = []
     if pull["headRefOid"] != meta["sha"]:
-        view.append(f"{YELLOW}The PR has new commits since the review ({meta['sha'][:7]} -> {pull['headRefOid'][:7]}). Lines were re-placed by anchor.{R}\n")
-    if not pending:
-        view += [f"{B}Review body{R}", body or f"{DIM}(none){R}", ""]
-    elif folded:
-        view += [f"{YELLOW}Not posted, the pending review's body is left alone. Add these yourself:{R}"]
-        view += [f"- {f['file']}:{f['line']} {f['comment']}" for f in folded] + [""]
-    view.append(f"{B}Comments ({len(threads)}){R}")
+        notes.append(f"The PR has new commits since the review ({meta['sha'][:7]} -> {pull['headRefOid'][:7]}). Lines were re-placed by anchor.")
+    if pending and folded:
+        notes.append("Not posted, the pending review's body is left alone. Add these yourself:")
+        notes.extend(f"- {f['file']}:{f['line']} {f['comment']}" for f in folded)
     for f in threads:
-        view += [f"{DIM}{f['file']} {position(f['placement'])}{R}", comment_text(f), ""]
-    print("\n".join(view), flush=True)
+        placement = f["placement"]
+        note = f" ({placement['note']})" if placement["note"] else ""
+        notes.append(f"{f['file']} {position(placement)}{note}")
 
     if not threads and not body:
-        return pause("Nothing to post.")
-    if choice(f"[s] post {len(threads)} comment(s) to the pending review   [c/esc/q] cancel > ", "sc\x1bq") != "s":
-        return
+        return report("\n".join(["Nothing to post.", *notes]))
     if dry:
-        return pause(json.dumps({"review": None if pending else {"pullRequestId": pull["id"], "commitOID": pull["headRefOid"], "body": body},
-                                 "threads": [thread_input(f) for f in threads]}, indent=2, ensure_ascii=False))
+        payload = {"review": None if pending else {"pullRequestId": pull["id"], "commitOID": pull["headRefOid"], "body": body},
+                   "threads": [thread_input(f) for f in threads]}
+        return report("\n".join(["Dry run: nothing posted.", json.dumps(payload, indent=2, ensure_ascii=False), *notes]))
 
     review_id = pending["id"] if pending else graphql(CREATE_REVIEW, input={
         "pullRequestId": pull["id"], "commitOID": pull["headRefOid"], "body": body,
     })["addPullRequestReview"]["pullRequestReview"]["id"]
-    failed = []
+    failed, posted = [], []
     for f in threads:
         try:
             graphql(ADD_THREAD, input={"pullRequestReviewId": review_id, **thread_input(f)})
+            posted.append(f)
         except RuntimeError as error:
             failed.append(f"{f['file']}:{f['line']} {error}")
-    posted = len(threads) - len(failed)
-    report = [f"{posted} comment(s) added to your pending review. Submit it at https://github.com/{repo}/pull/{pr}/files"]
-    pause("\n".join(report + (["\nFailed:"] + failed if failed else [])))
+    included = [*posted, *([] if pending else folded)]
+    positions = [i + 1 for i, f in enumerate(findings) if any(f is item for item in included)]
+    summary = f"{len(posted)} comment(s) added to your pending review. Submit it at https://github.com/{repo}/pull/{pr}/files"
+    report("\n\n".join([summary, *notes, *(["Failed:", *failed] if failed else [])]), positions)
+    if failed:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    try:
+        main(sys.argv[1:])
+    except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
+        print(error, file=sys.stderr)
+        sys.exit(1)

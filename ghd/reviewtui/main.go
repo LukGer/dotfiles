@@ -1,9 +1,10 @@
 // ghd's review screen: watches a running reviewer, then lets you read, tick,
 // edit and post its findings.
 //
-//	ghd tui <review prefix>                 read a saved review
+//	ghd tui <review prefix> [--dry]         read a saved review
 //	ghd tui <review prefix> -- <command>    run the reviewer, then read its review
 //	ghd tui menu <result file>              choose a reviewer and its instructions
+//	ghd tui screen <request> <result>       show a picker or message from JSON
 //
 // The prefix is the path of a review without its extension; its .json, .findings,
 // .md, .progress and .packet.md files live next to it. GHD_LIB names the ghd
@@ -20,11 +21,18 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: ghd tui <review prefix> [-- command...] | ghd tui menu <result file>")
+		fmt.Fprintln(os.Stderr, "usage: ghd tui <review prefix> [--dry] [-- command...] | menu <result> | screen <request> <result>")
 		os.Exit(2)
 	}
 	if os.Args[1] == "menu" && len(os.Args) == 3 {
 		if err := runMenu(os.Args[2]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+	if os.Args[1] == "screen" && len(os.Args) == 4 {
+		if err := runScreen(os.Args[2], os.Args[3]); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -39,6 +47,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	m.dry = slices.Contains(os.Args[2:], "--dry")
 	if _, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

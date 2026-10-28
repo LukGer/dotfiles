@@ -369,22 +369,6 @@ def test_completed_review_opens_its_saved_markdown_before_returning(cli, tool):
     assert result.stdout.count("\a") == 1
 
 
-def test_saved_review_opens_in_the_current_popup(cli, tmp_path):
-    store = tmp_path / "reviews"
-    store.mkdir()
-    markdown = store / "past.md"
-    markdown.write_text("# Past review")
-    markdown.with_suffix(".json").write_text(json.dumps({
-        "repo": "owner/repo", "pr": 42, "at": "earlier", "tool": "codex", "sha": "1234567890",
-    }))
-    result, calls = cli("history", MENU_CHOICE=str(markdown), input_text="\n")
-    assert result.returncode == 0, result.stderr
-    viewers = [args for name, *args in calls if name == "glow"]
-    assert len(viewers) == 1, calls
-    assert viewers[0][-1] == str(markdown)
-    assert not any(name == "osascript" for name, *_ in calls)
-
-
 def test_popup_can_open_a_ghostty_tab_with_literal_arguments(cli):
     result, calls = cli("open", "popup", str(ROOT / "ghd/open"), "tab", "printf", "hello 'world' $HOME", RUN_POPUP="1")
     assert result.returncode == 0, result.stderr

@@ -41,6 +41,8 @@ func (m *model) mouse(msg tea.MouseMsg) {
 	v, left := &m.detail, m.listWidth()+2
 	if m.mode == running {
 		v, left = &m.log, m.sideWidth()+2
+	} else if m.mode == postResult {
+		left = 0
 	} else if m.mode != reviewing {
 		return
 	}

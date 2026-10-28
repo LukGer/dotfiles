@@ -1,7 +1,13 @@
+import fcntl
 import json
 import os
 from pathlib import Path
+import pty
+import select
+import struct
 import subprocess
+import termios
+import time
 
 import pytest
 
@@ -44,24 +50,42 @@ if name == 'gh':
         sys.exit(1)
     page = sum(json.loads(line)[0] == 'gh' for line in previous)
     print(json.dumps(json.loads(os.environ['RESPONSES'])[page]))
-elif name == 'fzf':
-    lines = sys.stdin.read().splitlines()
-    choice = os.environ.get('CHOICE', '0')
-    if choice == 'cancel':
-        sys.exit(130)
-    print(lines[int(choice)])
 """)
     stub.chmod(0o755)
-    for name in ("gh", "open", "fzf"):
+    for name in ("gh", "open"):
         (tmp_path / name).symlink_to(stub)
 
     def run(*pages, **overrides):
-        result = subprocess.run(
-            [str(ROOT / "bin/ghd"), "deployment", "owner/repo", "42"],
-            env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}",
-                 "CALLS": str(calls), "RESPONSES": json.dumps(pages), **overrides},
-            input="", capture_output=True, text=True, timeout=10,
-        )
+        env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}",
+               "CALLS": str(calls), "RESPONSES": json.dumps(pages), **overrides}
+        command = [str(ROOT / "bin/ghd"), "deployment", "owner/repo", "42"]
+        if "CHOICE" in overrides:
+            master, slave = pty.openpty()
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 100, 0, 0))
+            process = subprocess.Popen(command, env={**env, "TERM": "xterm-256color"},
+                                       stdin=slave, stdout=slave, stderr=slave)
+            output = b""
+            try:
+                deadline = time.monotonic() + 10
+                sent = False
+                while process.poll() is None:
+                    assert time.monotonic() < deadline, f"deployment picker did not finish: {output[-500:]!r}"
+                    if select.select([master], [], [], .05)[0]:
+                        output += os.read(master, 65536)
+                    if not sent and b"enter select" in output:
+                        choice = overrides["CHOICE"]
+                        os.write(master, b"\x1b" if choice == "cancel" else b"j" * int(choice) + b"\r")
+                        sent = True
+                assert sent, f"deployment picker never appeared: {output[-500:]!r}"
+                result = subprocess.CompletedProcess(command, process.returncode, output.decode(), "")
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=3)
+                os.close(master)
+                os.close(slave)
+        else:
+            result = subprocess.run(command, env=env, input="", capture_output=True, text=True, timeout=10)
         recorded = [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
         return result, recorded
 
@@ -116,7 +140,7 @@ def test_chooses_between_environments(cli, choice, expected):
         deployment(url="https://old.example.com", created="2026-10-20T09:00:00Z"),
     ])]), CHOICE=choice)
     assert result.returncode == 0, result.stderr
-    assert any(call[0] == "fzf" for call in calls)
+    assert "Deployment" in result.stdout
     assert [call for call in calls if call[0] == "open"] == ([["open", expected]] if expected else [])
 
 

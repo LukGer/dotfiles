@@ -4,6 +4,8 @@ import json
 import subprocess
 import sys
 
+from ui import choose, pause
+
 
 QUERY = """
 query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
@@ -67,7 +69,7 @@ def main():
     pr, deployments = fetch_deployments(args.repo, args.pr)
     deployments.sort(key=lambda item: item[0]["createdAt"], reverse=True)
     if not deployments:
-        print(f"No deployments associated with {args.repo}#{args.pr}.")
+        pause(f"No deployments associated with {args.repo}#{args.pr}.")
         return 1
     environments = {}
     for deployment, sha in deployments:
@@ -84,37 +86,38 @@ def main():
     if choices:
         selected = choices[0]
         if len(choices) > 1:
-            picker = subprocess.run(
-                ["fzf", "--prompt=Deployment > ", "--height=100%", "--layout=reverse"],
-                input="\n".join(choices), capture_output=True, text=True,
-            )
-            if picker.returncode in (1, 130):
+            picked = choose("Deployment", [{"label": choice.split("\t", 1)[0],
+                                            "preview": choice.split("\t", 1)[1]} for choice in choices])
+            if picked is None:
                 return 0
-            picker.check_returncode()
-            selected = picker.stdout.strip()
+            selected = choices[picked]
         label, url = selected.split("\t", 1)
         print(f"Opening {label}: {url}")
         subprocess.run(["open", url], check=True)
         return 0
-    print("No active deployment URL is available:")
+    message = ["No active deployment URL is available:"]
     seen = set()
     for deployment, _ in deployments:
         if deployment["environment"] in seen:
             continue
         seen.add(deployment["environment"])
-        print(f"  {deployment['environment']}: {deployment['state']}")
+        message.append(f"  {deployment['environment']}: {deployment['state']}")
+    pause("\n".join(message))
     return 1
 
 
 if __name__ == "__main__":
+    message = None
     try:
         code = main()
     except subprocess.CalledProcessError as error:
-        print(error.stderr or f"{error.cmd[0]} failed ({error.returncode}).", file=sys.stderr)
+        message = error.stderr or f"{error.cmd[0]} failed ({error.returncode})."
         code = 1
     except (OSError, ValueError, RuntimeError) as error:
-        print(error, file=sys.stderr)
+        message = str(error)
         code = 1
-    if code and sys.stdin.isatty():
-        input("Press Enter to return to the dashboard.")
+    if message:
+        print(message, file=sys.stderr)
+        if sys.stdin.isatty() and sys.stdout.isatty():
+            pause(message)
     sys.exit(code)

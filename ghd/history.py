@@ -13,7 +13,7 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
-from ui import reviewer
+from ui import choose, pause, reviewer
 
 STORE = os.environ.get("GHD_STORE") or os.path.expanduser("~/.local/share/gh-dash-reviews")
 LIB = os.path.dirname(os.path.realpath(__file__))
@@ -57,26 +57,17 @@ def main(argv: list[str]) -> None:
         if os.path.exists(meta["file"]) and (not only or (meta["repo"], str(meta["pr"])) == only):
             metas.append(meta)
     if not metas:
-        print("No saved reviews yet.")
-        input("\nPress enter to close...")
-        return
+        return pause("No saved reviews yet.")
 
     keys = sorted({(m["repo"], m["pr"]) for m in metas})
     with ThreadPoolExecutor(8) as pool:
         cur = dict(zip(keys, pool.map(current, keys)))
         states = list(pool.map(lambda m: status(m, cur[(m["repo"], m["pr"])]), metas))
-    rows = [f"{m['file']}\t{m['at']}  {m['repo']}#{m['pr']}  {reviewer(m):24}  {duration(m):>7}  {(m.get('title') or '')[:55]:55}  {s}"
-            for m, s in zip(metas, states)]
-
-    picked = subprocess.run(
-        ["fzf", "--ansi", "--delimiter=\t", "--with-nth=2", "--no-sort",
-         "--header=enter: read review   ctrl-y: copy   esc: close",
-         "--bind", "ctrl-y:execute-silent(pbcopy < {1})+change-header(Copied to clipboard.)",
-         "--preview", "glow -s dark -w $FZF_PREVIEW_COLUMNS {1}", "--preview-window=right:60%"],
-        input="\n".join(rows), stdout=subprocess.PIPE, text=True,
-    ).stdout.strip()
-    if picked:
-        meta = next(m for m in metas if m["file"] == picked.split("\t")[0])
+    items = [{"label": f"{m['at']}  {m['repo']}#{m['pr']}  {reviewer(m):24}  {duration(m):>7}  {(m.get('title') or '')[:55]}  {s}",
+              "preview_file": m["file"]} for m, s in zip(metas, states)]
+    picked = choose("Saved reviews", items, copy=True)
+    if picked is not None:
+        meta = metas[picked]
         os.execv(f"{LIB}/view", [f"{LIB}/view", meta["repo"], str(meta["pr"]), meta["file"]])
 
 
