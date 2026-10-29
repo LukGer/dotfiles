@@ -1,17 +1,20 @@
 ---
 name: papercuts
-description: Triage and fix friction from the shared papercut database.
+description: Triage and fix shared papercuts, optionally scoped to the current repository.
 disable-model-invocation: true
 ---
 
-Run `papercut list --all --json` and work through the entries with the user. Never
-run this unprompted — agents log papercuts, the user decides when they get
+Run `papercut list --all --json` and work through the entries with the user.
+When the user asks for the current repository (for example, `/papercuts current repo`),
+add `--current-repo`. This includes entries from all of its worktrees.
+Never run this unprompted — agents log papercuts, the user decides when they get
 fixed.
 
 ## Scope
 
-All instances share `~/.papercuts/papercuts.sqlite`. The list includes entries
-from every repository and from outside Git. Use each entry's `directory` to
+All instances share `~/.papercuts/papercuts.sqlite`. Without `--current-repo`,
+the list includes entries from every repository and from outside Git.
+The filter requires running inside a Git repository. Use each entry's `directory` to
 locate the source; `repository` identifies its shared Git directory across
 worktrees. The current checkout may be unrelated.
 If `directory` no longer exists, use `git --git-dir <repository> worktree list`

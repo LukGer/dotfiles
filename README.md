@@ -72,6 +72,8 @@ to upgrade them too.
 Papercuts from all repositories and shells share one local SQLite database.
 `papercut list` shows open entries with their source paths; add `--all` to include
 won't-fix entries or `--json` for structured output. `/papercuts` guides triage.
+Add `--current-repo` to list entries only from the current Git repository,
+including its other worktrees. Use `/papercuts current repo` for scoped triage.
 After fixing an entry, `papercut resolve <id>...` deletes it. Use
 `papercut dismiss <id>... --reason "..."` to record a won't-fix decision.
 
