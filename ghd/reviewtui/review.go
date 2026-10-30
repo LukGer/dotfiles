@@ -64,7 +64,7 @@ func CommentText(f Finding) string {
 	if f.Severity == "P3" {
 		nit = "nit: "
 	}
-	return fmt.Sprintf("%s %s%s\n\n%s", mark, nit, f.Comment, aiSuffix)
+	return fmt.Sprintf("[%s] %s %s%s\n\n%s", f.Severity, mark, nit, f.Comment, aiSuffix)
 }
 
 // Pointer renders file:line or file:start-line.

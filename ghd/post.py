@@ -67,13 +67,13 @@ def place(finding: dict, diff: dict[str, dict[int, tuple[int, str]]]) -> dict:
 
 def comment_text(finding: dict) -> str:
     nit = "nit: " if finding["severity"] == "P3" else ""
-    return f"{EMOJI.get(finding['category'], '•')} {nit}{finding['comment']}\n\n{AI_SUFFIX}"
+    return f"[{finding['severity']}] {EMOJI.get(finding['category'], '•')} {nit}{finding['comment']}\n\n{AI_SUFFIX}"
 
 
 def review_body(tldr: str, folded: list[dict]) -> str:
     parts = [tldr] if tldr else []
     if folded:
-        notes = [f"- {EMOJI.get(f['category'], '•')} `{f['file']}:{f['line']}` {f['comment']}" for f in folded]
+        notes = [f"- [{f['severity']}] {EMOJI.get(f['category'], '•')} `{f['file']}:{f['line']}` {f['comment']}" for f in folded]
         parts.append("**Further notes**\n" + "\n".join(notes))
     return "\n\n".join(parts + [AI_SUFFIX]) if parts else ""
 

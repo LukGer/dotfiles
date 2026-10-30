@@ -50,6 +50,7 @@ def test_selected_findings_post_without_reading_terminal_input(tmp_path, monkeyp
     post.main(["owner/repo", "42", "--review", str(path), "--pick", "1"])
     assert [query for query, _ in mutations] == ([post.ADD_THREAD] if pending else [post.CREATE_REVIEW, post.ADD_THREAD])
     assert mutations[-1][1]["pullRequestReviewId"] == ("existing" if pending else "new")
+    assert mutations[-1][1]["body"] == "[P1] 🐛 Fix this.\n\n(added by AI)"
     assert "1 comment(s) added" in capsys.readouterr().out
 
 
@@ -164,9 +165,10 @@ def test_place(finding, expected):
 
 
 @pytest.mark.parametrize("category, severity, expected", [
-    ("bug", "P1", "🐛 Off by one.\n\n(added by AI)"),
-    ("quality", "P3", "🧹 nit: Off by one.\n\n(added by AI)"),
-    ("unknown", "P2", "• Off by one.\n\n(added by AI)"),
+    ("security", "P0", "[P0] 🔒 Off by one.\n\n(added by AI)"),
+    ("bug", "P1", "[P1] 🐛 Off by one.\n\n(added by AI)"),
+    ("quality", "P3", "[P3] 🧹 nit: Off by one.\n\n(added by AI)"),
+    ("unknown", "P2", "[P2] • Off by one.\n\n(added by AI)"),
 ])
 def test_comment_text(category, severity, expected):
     finding = {"category": category, "severity": severity, "comment": "Off by one."}
@@ -177,7 +179,7 @@ def test_comment_text(category, severity, expected):
     ("", [], ""),
     ("Looks good.", [], "Looks good.\n\n(added by AI)"),
     ("", [{"category": "risk", "severity": "P2", "file": "x.ts", "line": 4, "comment": "Slow."}],
-     "**Further notes**\n- ⚠️ `x.ts:4` Slow.\n\n(added by AI)"),
+     "**Further notes**\n- [P2] ⚠️ `x.ts:4` Slow.\n\n(added by AI)"),
 ])
 def test_review_body(tldr, folded, expected):
     assert post.review_body(tldr, folded) == expected

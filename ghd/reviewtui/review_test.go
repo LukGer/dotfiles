@@ -14,10 +14,11 @@ func TestPreselectedAndCommentText(t *testing.T) {
 		selected bool
 		comment  string
 	}{
-		{Finding{Category: "bug", Severity: "P1", Comment: "Null here."}, true, "🐛 Null here.\n\n(added by AI)"},
-		{Finding{Category: "quality", Severity: "P3", Comment: "Rename."}, false, "🧹 nit: Rename.\n\n(added by AI)"},
-		{Finding{Category: "completeness", Severity: "P1", Comment: "Missing."}, false, "📋 Missing.\n\n(added by AI)"},
-		{Finding{Category: "other", Severity: "P2", Comment: "Hm."}, true, "• Hm.\n\n(added by AI)"},
+		{Finding{Category: "security", Severity: "P0", Comment: "Exposed."}, true, "[P0] 🔒 Exposed.\n\n(added by AI)"},
+		{Finding{Category: "bug", Severity: "P1", Comment: "Null here."}, true, "[P1] 🐛 Null here.\n\n(added by AI)"},
+		{Finding{Category: "quality", Severity: "P3", Comment: "Rename."}, false, "[P3] 🧹 nit: Rename.\n\n(added by AI)"},
+		{Finding{Category: "completeness", Severity: "P1", Comment: "Missing."}, false, "[P1] 📋 Missing.\n\n(added by AI)"},
+		{Finding{Category: "other", Severity: "P2", Comment: "Hm."}, true, "[P2] • Hm.\n\n(added by AI)"},
 	} {
 		if got := Preselected(tc.finding); got != tc.selected {
 			t.Errorf("%+v preselected %v", tc.finding, got)

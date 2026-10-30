@@ -200,8 +200,9 @@ the review tools and `mcp__atlassian__*`. Skills, `AGENTS.md` and your
 2. Each line is checked against the live PR diff and moved by its anchor text
    when the PR changed. A finding that cannot be placed becomes a whole-file
    comment, or a line in the review body when its file is not in the diff.
-3. Press `p` to post. Comments read `🐛 <comment>`, with `nit:` on P3s, and end
-   with `(added by AI)`. A new review gets the agent's TLDR as its body.
+3. Press `p` to post. Comments lead with severity, e.g. `[P1] 🐛 <comment>`,
+   with `nit:` on P3s, and end with `(added by AI)`. Findings folded into the
+   review body also lead with severity. A new review gets the agent's TLDR as its body.
 4. An existing pending review is added to, never replaced. Submit it on GitHub.
 
 `--review <findings file>` skips the review picker and uses that saved review,
