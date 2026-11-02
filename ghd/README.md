@@ -89,6 +89,9 @@ change the release and toolchain in `dash` and rebase `gh-dash.patch`.
 
 ## Reviews
 
+Opus reviews use `pi-claude-bridge` with your Claude Code login. Install it with
+`pi install npm:pi-claude-bridge` and sign in through `claude` if needed.
+
 `ghd review <owner/repo> <pr> [pi [provider/model[:thinking]] | opencode | claude] [--instructions <text>]`
 also works from any shell. `--instructions` carries the menu's instructions:
 they end the brief, every pi specialist pass receives them verbatim, and the

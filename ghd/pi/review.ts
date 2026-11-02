@@ -23,6 +23,8 @@ const HEAD = process.env.GHD_HEAD!;
 const MERGE_BASE = process.env.GHD_MERGE_BASE;
 const MODEL = process.env.GHD_MODEL;
 const ROLE = process.env.GHD_ROLE ?? "orchestrator";
+// The bridge needs a final provider call to deliver its tool result and close Claude Code.
+const terminateAfterTool = !MODEL?.startsWith("claude-bridge/");
 
 const FindingSchema = Type.Object({
   file: Type.String({ description: "repo-relative path" }),
@@ -71,6 +73,7 @@ function runSpecialist(specialist: string, skill: string | undefined, prompt: st
   const guidelines = skill && existsSync(skill) ? skill : join(HERE, "specialists", `${specialist}.md`);
   const args = ["-p", "--mode", "json", "--no-session", "--tools", "read,bash,codemode,report_candidates",
     "--no-extensions", "-e", "builtin:codemode", "-e", join(HERE, "review.ts"),
+    ...(process.env.GHD_PROVIDER_EXTENSION ? ["-e", process.env.GHD_PROVIDER_EXTENSION] : []),
     "--append-system-prompt", join(HERE, "specialist.md"), "--append-system-prompt", guidelines,
     ...(MODEL ? ["--model", MODEL] : []), prompt];
   const invocation = piInvocation(args);
@@ -129,7 +132,7 @@ export default function (pi: ExtensionAPI) {
       }),
       async execute(_id, params: any) {
         writeFileSync(process.env.GHD_SPECIALIST_OUT!, JSON.stringify({ ...params, specialist: process.env.GHD_SPECIALIST }));
-        return { ...text(`Reported ${params.candidates.length} candidate(s).`), details: undefined, terminate: true };
+        return { ...text(`Reported ${params.candidates.length} candidate(s).`), details: undefined, terminate: terminateAfterTool };
       },
     });
     return;
@@ -204,7 +207,7 @@ export default function (pi: ExtensionAPI) {
       writeFileSync(`${OUT}.md`, renderMarkdown(final, { repo: meta.repo, pr: meta.pr, title: meta.title, tool: meta.tool, model: meta.model ?? MODEL ?? "", sha: HEAD, instructions: meta.instructions }));
       progress({ kind: "file", label: findingsFile });
       progress({ kind: "file", label: `${OUT}.md` });
-      return { ...text(`Review finished with ${final.findings.length} finding(s).`), details: undefined, terminate: true };
+      return { ...text(`Review finished with ${final.findings.length} finding(s).`), details: undefined, terminate: terminateAfterTool };
     },
   });
 }

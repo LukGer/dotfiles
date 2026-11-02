@@ -158,16 +158,26 @@ def test_dashboard_runs_in_the_calling_terminal(cli, terminal, exit_code):
 MODELS = {"pi": "openai-codex/gpt-6.1-sol:high", "opencode": "openai/gpt-6.1-sol#high", "claude": "claude-opus-5-5"}
 
 
-@pytest.mark.parametrize("tool, mode", [("pi", "-p"), ("opencode", "run"), ("claude", "-p")])
-def test_review_finishes_without_an_interactive_agent_prompt(cli, tool, mode):
-    result, calls = cli("review", "owner/repo", "42", tool)
+@pytest.mark.parametrize("tool, mode, model", [
+    ("pi", "-p", MODELS["pi"]),
+    ("pi", "-p", "claude-bridge/claude-opus-5-5:high"),
+    ("opencode", "run", MODELS["opencode"]),
+    ("claude", "-p", MODELS["claude"]),
+])
+def test_review_finishes_without_an_interactive_agent_prompt(cli, tmp_path, tool, mode, model):
+    agent_dir = tmp_path / "pi agent"
+    result, calls = cli("review", "owner/repo", "42", tool, *([model] if tool == "pi" else []),
+                        PI_CODING_AGENT_DIR=str(agent_dir))
     assert result.returncode == 0, result.stderr
     args = next(args for name, *args in calls if name == tool)
     assert mode in args
-    assert args[args.index("--model") + 1] == MODELS[tool]
+    assert args[args.index("--model") + 1] == model
     if tool == "pi":
         loaded = [args[i + 1] for i, arg in enumerate(args) if arg == "-e"]
-        assert "--no-extensions" in args and loaded == ["builtin:codemode", "builtin:mcp", str(ROOT / "ghd/pi/review.ts")], "personal pi packages must not load"
+        expected = ["builtin:codemode", "builtin:mcp", str(ROOT / "ghd/pi/review.ts")]
+        if model.startswith("claude-bridge/"):
+            expected.append(str(agent_dir / "npm/node_modules/pi-claude-bridge/src/index.ts"))
+        assert "--no-extensions" in args and loaded == expected, "only review tools and the selected provider load"
         assert {"save_finding", "finish_review", "review_pass", "codemode"} <= set(args[args.index("--tools") + 1].split(","))
         assert "# PR review" in args[args.index("--append-system-prompt") + 1], "the skill body without its frontmatter"
         assert "---" not in args[args.index("--append-system-prompt") + 1].splitlines()[0]
@@ -321,8 +331,8 @@ def test_review_brief_points_at_the_previous_review_of_the_same_pr(cli, tmp_path
 
 @pytest.mark.parametrize("choice, review_args", [
     ({"action": "review", "model": "openai-codex/gpt-6.1-sol:high"}, ["pi", "openai-codex/gpt-6.1-sol:high", "--instructions", ""]),
-    ({"action": "review", "model": "anthropic/claude-opus-5-5:high", "instructions": "Only src/, it's #1\nskip $HOME"},
-     ["pi", "anthropic/claude-opus-5-5:high", "--instructions", "Only src/, it's #1\nskip $HOME"]),
+    ({"action": "review", "model": "claude-bridge/claude-opus-5-5:high", "instructions": "Only src/, it's #1\nskip $HOME"},
+     ["pi", "claude-bridge/claude-opus-5-5:high", "--instructions", "Only src/, it's #1\nskip $HOME"]),
 ])
 def test_menu_launches_review_in_the_dashboard_popup(cli, choice, review_args):
     result, calls = cli("review", "owner/repo", "42", MENU_CHOICE=json.dumps(choice))
@@ -345,7 +355,7 @@ def test_review_instructions_reach_the_reviewer_and_the_saved_metadata(cli, tmp_
     assert meta["instructions"] == instructions
 
 
-@pytest.mark.parametrize("key, model", [("ctrl+g", "anthropic/claude-opus-5-5:high"), ("ctrl+t", "openai-codex/gpt-6.1-sol:high")])
+@pytest.mark.parametrize("key, model", [("ctrl+g", "claude-bridge/claude-opus-5-5:high"), ("ctrl+t", "openai-codex/gpt-6.1-sol:high")])
 def test_review_shortcuts_run_in_the_dashboard_popup(cli, key, model):
     command = [arg.replace("{{.RepoName}}", "owner/repo").replace("{{.PrNumber}}", "42")
                for arg in key_command(key)]

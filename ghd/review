@@ -119,9 +119,15 @@ case $tool in
   pi)
     export GHD_REVIEW=$out GHD_HEAD=$head GHD_MERGE_BASE=$merge_base GHD_MODEL=$model GHD_INSTRUCTIONS=$instructions
     skill=$(awk 'c >= 2 { print } /^---$/ { c++ }' $lib/../ai/skills/pr-review/SKILL.md)
+    provider_extensions=()
+    if [[ $model == claude-bridge/* ]]; then
+      export GHD_PROVIDER_EXTENSION=${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/npm/node_modules/pi-claude-bridge/src/index.ts
+      provider_extensions=(-e "$GHD_PROVIDER_EXTENSION")
+    fi
     pi_args=(-p --mode json --session-id $session --model $model
       --tools 'read,bash,codemode,review_pass,save_finding,finish_review,mcp__atlassian__*'
       --no-extensions -e builtin:codemode -e builtin:mcp -e $lib/pi/review.ts
+      "${provider_extensions[@]}"
       --append-system-prompt "$skill" --append-system-prompt $lib/pi/orchestrator.md -n "#$pr review" "$brief")
     if [[ -t 1 ]]; then
       $lib/tui $out -- pi "${pi_args[@]}"

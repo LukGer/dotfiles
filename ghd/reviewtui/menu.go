@@ -20,7 +20,7 @@ type menuItem struct {
 
 var menuItems = []menuItem{
 	{"GPT-6.1 Sol", "high · pi", "review", "openai-codex/gpt-6.1-sol:high"},
-	{"Opus 5.5", "high · pi", "review", "anthropic/claude-opus-5-5:high"},
+	{"Opus 5.5", "high · pi", "review", "claude-bridge/claude-opus-5-5:high"},
 	{"Past reviews of this PR", "", "past", ""},
 	{"Post to GitHub (pending)", "", "post", ""},
 }
