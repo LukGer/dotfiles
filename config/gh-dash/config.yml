@@ -25,6 +25,9 @@ keybindings:
     - key: k
       builtin: pageUp
   prs:
+    - key: c
+      name: chat with PR
+      command: ghd open popup ghd chat {{.RepoName}} {{.PrNumber}}
     - key: O
       name: open deployment
       command: ghd open popup ghd deployment {{.RepoName}} {{.PrNumber}}

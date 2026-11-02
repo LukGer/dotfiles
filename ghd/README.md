@@ -1,8 +1,9 @@
 # ghd: PR dashboard with agent reviews
 
 [gh-dash](https://github.com/dlvhdr/gh-dash) in your current terminal. From
-any PR you can open the diff or full description in a tab, run a GPT-6.1 Sol or
-Opus 5.5 review, and turn the findings you tick into a **pending** GitHub review.
+any PR you can open the diff or full description in a tab, chat about its changes,
+run a GPT-6.1 Sol or Opus 5.5 review, and turn the findings you tick into a
+**pending** GitHub review.
 
 The idea and most of the original scripts are Valentin's. This version uses
 Ghostty tabs for diffs and descriptions, an isolated tmux session for review
@@ -29,7 +30,8 @@ viewers run in place.
 | Key | Action |
 | --- | --- |
 | `ctrl+g` / `ctrl+t` | Opus 5.5 / GPT-6.1 Sol high review (both through pi) in a popup in this window |
-| `f` | Menu: models with their harnesses (then instructions for that review), past reviews of this PR, post |
+| `c` | Chat with the PR: choose a model, then ask questions about its diff |
+| `f` | Menu: review models (then instructions), past reviews of this PR, post, chat |
 | `E` | Past reviews of every PR: `enter` reads one here, `ctrl-y` copies it |
 | `ctrl+o` | Post findings as a pending review |
 | `d` / `D` | Diff in a new tab, side by side |
@@ -38,7 +40,7 @@ viewers run in place.
 | `j` / `k` | Scroll the preview pane |
 
 gh-dash's own keys still work; `?` lists them. The review menu floats in the
-centre of the dashboard; choose with `1`–`4` or the arrow keys and enter.
+centre of the dashboard; choose with `1`–`5` or the arrow keys and enter.
 Choosing a model then asks for instructions for this review, such as files to
 focus on or skip and concerns to weigh: enter starts the review (leave it empty
 for a full review), alt+enter or ctrl+j adds a line, and escape returns to the
@@ -86,6 +88,30 @@ binary under `${XDG_CACHE_HOME:-~/.cache}/ghd/`. Later launches reuse it;
 changing the patch rebuilds it. The installed `gh dash` extension is independent.
 Quit and restart `ghd` to load dashboard changes. To update the patched version,
 change the release and toolchain in `dash` and rebase `gh-dash.patch`.
+
+## Chat with a PR
+
+Press `c`, or choose **Chat with PR** from `f`, then choose GPT-6.1 Sol or
+Opus 5.5. pi opens an interactive conversation with the PR description and full
+diff attached. It starts with a brief overview; ask follow-up questions directly,
+such as “Why did this change?” or “Walk me through the new error handling.”
+
+```sh
+ghd chat owner/repo 42
+ghd chat owner/repo 42 --model openai-codex/gpt-6.1-sol:high
+```
+
+Chat fetches its context through `gh`, so it works without a local clone and
+never creates a checkout. The review and chat pickers share the same models;
+`--model` also accepts any pi `provider/model[:thinking]`.
+Opus uses the same `pi-claude-bridge` setup as reviews below.
+
+The conversation uses a snapshot of the description and diff from launch.
+It has no tools or access to surrounding repository files; paste extra context
+when a question needs it. Large PRs must fit the selected model's context window.
+Chat doesn't post anything to GitHub or save a review. Sessions are ephemeral:
+Ctrl+D exits pi when the input is empty and returns to the dashboard; starting
+chat again loads a fresh snapshot.
 
 ## Reviews
 
@@ -228,6 +254,7 @@ with its message and the 1-based positions that were successfully posted.
 | `deployment.py`, `test_deployment.py` | open active GitHub environments, with CLI tests for selection and failures |
 | `open` | Ghostty tabs and windows via AppleScript; tmux popups |
 | `review` | menu dispatch, instructions, worktree, packet, agent launch, cleanup |
+| `chat.py` | model picker and interactive pi conversation over a PR description and diff, without a checkout |
 | `packet.py`, `test_packet.py` | the review packet every reviewer reads |
 | `pi/review.ts`, `pi/lib.ts`, `pi/lib.test.ts` | pi extension: `review_pass`, `save_finding`, `finish_review`, the read-only guard, progress events; pure helpers tested with `node --test` |
 | `pi/orchestrator.md`, `pi/specialist.md`, `pi/specialists/` | system prompt additions for the orchestrator, every pass, and the generic specialist checklists |

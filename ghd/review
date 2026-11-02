@@ -34,6 +34,7 @@ if [[ -z $tool ]]; then
     review) exec $lib/open popup $lib/review $repo $pr pi $model --instructions "$instructions" ;;
     past) exec $lib/open popup $lib/history.py $repo $pr ;;
     post) exec $lib/open popup $lib/post.py $repo $pr ;;
+    chat) exec $lib/open popup $lib/chat.py $repo $pr ;;
   esac
   exit 0
 fi

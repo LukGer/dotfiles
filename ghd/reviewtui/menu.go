@@ -18,12 +18,16 @@ type menuItem struct {
 	label, detail, action, model string
 }
 
-var menuItems = []menuItem{
+var modelItems = []menuItem{
 	{"GPT-6.1 Sol", "high · pi", "review", "openai-codex/gpt-6.1-sol:high"},
 	{"Opus 5.5", "high · pi", "review", "claude-bridge/claude-opus-5-5:high"},
+}
+
+var menuItems = append(modelItems, []menuItem{
 	{"Past reviews of this PR", "", "past", ""},
 	{"Post to GitHub (pending)", "", "post", ""},
-}
+	{"Chat with PR", "", "chat", ""},
+}...)
 
 // menuResult is what `ghd review` reads back from the menu's result file.
 type menuResult struct {
@@ -33,6 +37,8 @@ type menuResult struct {
 }
 
 type menuModel struct {
+	items  []menuItem
+	chat   bool
 	cursor int
 	picked *menuItem
 	input  textarea.Model
@@ -55,7 +61,7 @@ func newMenuModel() *menuModel {
 	input.FocusedStyle.CursorLine = lipgloss.NewStyle()
 	input.FocusedStyle.Placeholder = dim
 	input.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("alt+enter", "ctrl+j"))
-	return &menuModel{input: input}
+	return &menuModel{items: menuItems, input: input}
 }
 
 func (m *menuModel) Init() tea.Cmd { return nil }
@@ -78,13 +84,13 @@ func (m *menuModel) listKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "esc", "ctrl+c":
 		return m, tea.Quit
 	case "up", "k":
-		m.cursor = (m.cursor + len(menuItems) - 1) % len(menuItems)
+		m.cursor = (m.cursor + len(m.items) - 1) % len(m.items)
 	case "down", "j":
-		m.cursor = (m.cursor + 1) % len(menuItems)
+		m.cursor = (m.cursor + 1) % len(m.items)
 	case "enter":
 		return m.choose(m.cursor)
 	default:
-		if n, err := strconv.Atoi(key); err == nil && n >= 1 && n <= len(menuItems) {
+		if n, err := strconv.Atoi(key); err == nil && n >= 1 && n <= len(m.items) {
 			return m.choose(n - 1)
 		}
 	}
@@ -93,7 +99,11 @@ func (m *menuModel) listKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *menuModel) choose(i int) (tea.Model, tea.Cmd) {
 	m.cursor = i
-	item := menuItems[i]
+	item := m.items[i]
+	if m.chat {
+		m.result = &menuResult{Action: "chat", Model: item.model}
+		return m, tea.Quit
+	}
 	if item.action != "review" {
 		m.result = &menuResult{Action: item.action}
 		return m, tea.Quit
@@ -129,14 +139,17 @@ func (m *menuModel) View() string {
 		}, "\n"))
 	}
 	labelWidth := 0
-	for _, item := range menuItems {
+	for _, item := range m.items {
 		if item.detail != "" {
 			labelWidth = max(labelWidth, lipgloss.Width(item.label))
 		}
 	}
 	var rows []string
-	for i, item := range menuItems {
-		if i > 0 && menuItems[i-1].action == "review" && item.action != "review" {
+	if m.chat {
+		rows = append(rows, bold.Render("Chat with PR"), dim.Render("Choose a model · diff only, no checkout"), "")
+	}
+	for i, item := range m.items {
+		if i > 0 && m.items[i-1].action == "review" && item.action != "review" {
 			rows = append(rows, "")
 		}
 		pointer, number, label := "  ", dim, lipgloss.NewStyle()
@@ -149,14 +162,17 @@ func (m *menuModel) View() string {
 		}
 		rows = append(rows, row)
 	}
-	rows = append(rows, "", dim.Render(fmt.Sprintf("1–%d choose · ↑/↓ move · enter select · esc/q cancel", len(menuItems))))
+	rows = append(rows, "", dim.Render(fmt.Sprintf("1–%d choose · ↑/↓ move · enter select · esc/q cancel", len(m.items))))
 	return menuPage.Render(strings.Join(rows, "\n"))
 }
 
 // runMenu shows the menu and writes the choice to result as JSON; a cancelled
 // menu leaves result untouched.
-func runMenu(result string) error {
+func runMenu(result string, chat bool) error {
 	m := newMenuModel()
+	if chat {
+		m.items, m.chat = modelItems, true
+	}
 	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
 		return err
 	}

@@ -21,11 +21,11 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: ghd tui <review prefix> [--dry] [-- command...] | menu <result> | screen <request> <result>")
+		fmt.Fprintln(os.Stderr, "usage: ghd tui <review prefix> [--dry] [-- command...] | menu <result> [chat] | screen <request> <result>")
 		os.Exit(2)
 	}
-	if os.Args[1] == "menu" && len(os.Args) == 3 {
-		if err := runMenu(os.Args[2]); err != nil {
+	if os.Args[1] == "menu" && (len(os.Args) == 3 || len(os.Args) == 4 && os.Args[3] == "chat") {
+		if err := runMenu(os.Args[2], len(os.Args) == 4); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
