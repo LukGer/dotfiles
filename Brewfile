@@ -52,7 +52,6 @@ brew "mise"
 brew "ruby@3.1"
 
 # --- Editors and terminals ---
-cask "cursor"
 cask "ghostty"
 
 # --- AI tooling ---
