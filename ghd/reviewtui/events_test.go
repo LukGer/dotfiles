@@ -10,6 +10,11 @@ func TestParse(t *testing.T) {
 		line string
 		want Event
 	}{
+		{`{"type":"text","part":{"text":"Reading the packet"}}`, Event{Text: "Reading the packet\n"}},
+		{`{"type":"tool_use","part":{"tool":"subagent","state":{"input":{"description":"Security pass"},"status":"completed"}}}`, Event{Tool: "subagent: Security pass"}},
+		{`{"type":"step_finish","part":{"cost":0.12}}`, Event{Cost: 0.12}},
+		{`{"type":"error","error":{"name":"APIError","data":{"message":"Token expired"}}}`, Event{Error: "Token expired"}},
+		{`{"type":"error","error":{"name":"UnknownError"}}`, Event{Error: "OpenCode reported an error"}},
 		{`{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"Hi"}}`, Event{Text: "Hi"}},
 		{`{"type":"message_update","assistantMessageEvent":{"type":"thinking_delta","delta":"hm"}}`, Event{}},
 		{`{"type":"tool_execution_start","toolCallId":"1","toolName":"bash","args":{"command":"git log\n--oneline"}}`, Event{Tool: "bash: git log"}},

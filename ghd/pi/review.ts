@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { blockedCommand, CATEGORIES, duplicateOf, type Finding, renderMarkdown, type Review, SEVERITIES, SPECIALISTS, specialistPrompt, summariseUsage } from "./lib.ts";
+import { blockedCommand, CATEGORIES, duplicateOf, type Finding, renderMarkdown, type Review, SEVERITIES, SPECIALISTS, specialistPrompt, summariseUsage } from "../review-lib.ts";
 
 const HERE = import.meta.dirname;
 const OUT = process.env.GHD_REVIEW!;
@@ -70,7 +70,7 @@ function piInvocation(args: string[]) {
 function runSpecialist(specialist: string, skill: string | undefined, prompt: string, signal: AbortSignal | undefined, onEvent: (event: any) => void) {
   const dir = mkdtempSync(join(tmpdir(), "ghd-pass-"));
   const report = join(dir, "candidates.json");
-  const guidelines = skill && existsSync(skill) ? skill : join(HERE, "specialists", `${specialist}.md`);
+  const guidelines = skill && existsSync(skill) ? skill : join(HERE, "..", "specialists", `${specialist}.md`);
   const args = ["-p", "--mode", "json", "--no-session", "--tools", "read,bash,codemode,report_candidates",
     "--no-extensions", "-e", "builtin:codemode", "-e", join(HERE, "review.ts"),
     ...(process.env.GHD_PROVIDER_EXTENSION ? ["-e", process.env.GHD_PROVIDER_EXTENSION] : []),

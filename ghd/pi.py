@@ -11,7 +11,7 @@ import json
 import subprocess
 import sys
 
-DETAIL_KEYS = ("specialist", "title", "path", "command", "pattern", "code")
+DETAIL_KEYS = ("specialist", "description", "title", "path", "command", "pattern", "code")
 
 
 def detail(name: str, args: dict) -> str:

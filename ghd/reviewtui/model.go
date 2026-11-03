@@ -413,11 +413,14 @@ func (m *model) resumeCommand() (*exec.Cmd, string) {
 	case "claude":
 		cmd = exec.Command("claude", "--resume", m.meta.Session, "--setting-sources", "user", "--mcp-config", filepath.Join(m.lib, "mcp.json"), "--add-dir", filepath.Dir(m.out))
 	case "opencode":
-		cmd = exec.Command("opencode", "--session", m.meta.Session)
+		cmd = exec.Command("opencode", "--session", m.meta.Session, "--standalone")
 	default:
 		return nil, "no conversation to continue for " + m.meta.Tool
 	}
 	cmd.Dir = m.meta.Cwd
+	if m.meta.Tool == "opencode" {
+		cmd.Env = append(os.Environ(), "GHD_REVIEW="+m.out)
+	}
 	return cmd, ""
 }
 

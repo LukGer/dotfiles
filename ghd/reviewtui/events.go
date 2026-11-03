@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Event is what one line of pi's --mode json stream means for the transcript.
+// Event is what one line of a harness's JSON stream means for the transcript.
 type Event struct {
 	Text  string  // assistant text to append
 	Tool  string  // a top-level tool call line, e.g. "review_pass: security"
@@ -15,15 +15,29 @@ type Event struct {
 	Done  bool    // agent_settled
 }
 
-var detailKeys = []string{"specialist", "title", "path", "command", "pattern", "code"}
+var detailKeys = []string{"specialist", "description", "title", "path", "command", "pattern", "code"}
 
-// Parse interprets one JSON line from pi. Lines that are not JSON are shown verbatim.
+// Parse interprets one JSON line from a harness. Lines that are not JSON are shown verbatim.
 func Parse(line string) Event {
 	var raw struct {
-		Type                  string          `json:"type"`
-		ParentToolCallID      string          `json:"parentToolCallId"`
-		ToolName              string          `json:"toolName"`
-		Args                  map[string]any  `json:"args"`
+		Type             string         `json:"type"`
+		ParentToolCallID string         `json:"parentToolCallId"`
+		ToolName         string         `json:"toolName"`
+		Args             map[string]any `json:"args"`
+		Part             struct {
+			Text  string  `json:"text"`
+			Tool  string  `json:"tool"`
+			Cost  float64 `json:"cost"`
+			State struct {
+				Input map[string]any `json:"input"`
+			} `json:"state"`
+		} `json:"part"`
+		Error struct {
+			Message string `json:"message"`
+			Data    struct {
+				Message string `json:"message"`
+			} `json:"data"`
+		} `json:"error"`
 		AssistantMessageEvent json.RawMessage `json:"assistantMessageEvent"`
 		Message               struct {
 			Role         string `json:"role"`
@@ -40,6 +54,21 @@ func Parse(line string) Event {
 		return Event{Text: line + "\n"}
 	}
 	switch raw.Type {
+	case "text":
+		return Event{Text: raw.Part.Text + "\n"}
+	case "tool_use":
+		return Event{Tool: fmt.Sprintf("%s: %s", raw.Part.Tool, detail(raw.Part.State.Input))}
+	case "step_finish":
+		return Event{Cost: raw.Part.Cost}
+	case "error":
+		message := raw.Error.Message
+		if message == "" {
+			message = raw.Error.Data.Message
+		}
+		if message == "" {
+			message = "OpenCode reported an error"
+		}
+		return Event{Error: message}
 	case "message_update":
 		var delta struct {
 			Type  string `json:"type"`

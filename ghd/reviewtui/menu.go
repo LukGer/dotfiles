@@ -19,8 +19,8 @@ type menuItem struct {
 }
 
 var modelItems = []menuItem{
-	{"GPT-6.1 Sol", "high · pi", "review", "openai-codex/gpt-6.1-sol:high"},
-	{"Opus 5.5", "high · pi", "review", "claude-bridge/claude-opus-5-5:high"},
+	{"GPT-6.1 Sol", "high · OpenCode", "review", "openai/gpt-6.1-sol#high"},
+	{"Opus (Claude Code)", "high · OpenCode", "review", "claude-agent/opus#high"},
 }
 
 var menuItems = append(modelItems, []menuItem{

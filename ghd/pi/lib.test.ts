@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { blockedCommand, duplicateOf, renderMarkdown, specialistPrompt, summariseUsage } from "./lib.ts";
+import { blockedCommand, duplicateOf, renderMarkdown, specialistPrompt, summariseUsage } from "../review-lib.ts";
 
 describe("blockedCommand", () => {
   const allowed = [

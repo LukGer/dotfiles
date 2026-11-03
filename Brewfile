@@ -59,6 +59,7 @@ cask "ghostty"
 # agent-browser CLI (skill lives in ai/skill-lock.json; Chromium via
 # `agent-browser install` in ai/install.sh).
 brew "agent-browser"
+brew "anomalyco/tap/opencode-v2"
 cask "claude"
 cask "conductor"
 

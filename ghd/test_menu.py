@@ -27,8 +27,8 @@ def built_review_screen():
                     reason="needs tmux and glow")
 @pytest.mark.parametrize("key, instructions, tool, paragraphs, action, response", [
     (b"\x1b", "", None, 0, None, None), (b"q", "", None, 0, None, None),
-    (b"1", "", "pi", 1, b"p", b"nothing selected"),
-    (b"2", "quality only, skip gen/", "pi", 80, b"c", b"CONVERSATION-READY"),
+    (b"1", "", "opencode", 1, b"p", b"nothing selected"),
+    (b"2", "quality only, skip gen/", "opencode", 80, b"c", b"CONVERSATION-READY"),
 ])
 def test_review_menu_waits_for_selection_before_returning_to_dashboard(tmp_path, key, instructions, tool, paragraphs, action, response):
     tmux = ["tmux", "-L", f"ghd-test-{uuid.uuid4().hex}"]
@@ -98,7 +98,7 @@ elif name == 'glow':
         )
         output = b""
         deadline = time.monotonic() + 5
-        while not all(label in output for label in (b"GPT-6.1 Sol", b"Opus 5.5", b"pi", b"Past reviews", b"Post to GitHub")):
+        while not all(label in output for label in (b"GPT-6.1 Sol", b"Opus (Claude Code)", b"OpenCode", b"Past reviews", b"Post to GitHub")):
             assert time.monotonic() < deadline, "menu did not draw all choices"
             if select.select([master], [], [], .05)[0]:
                 output += os.read(master, 65536)

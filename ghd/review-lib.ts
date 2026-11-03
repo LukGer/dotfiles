@@ -1,4 +1,4 @@
-// Pure helpers for the ghd pi extension, tested with `node --test`.
+// Pure helpers shared by the ghd review harnesses, tested with `node --test`.
 
 export const CATEGORIES = ["bug", "security", "risk", "quality", "design", "completeness"] as const;
 export const SEVERITIES = ["P0", "P1", "P2", "P3"] as const;

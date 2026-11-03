@@ -166,7 +166,7 @@ MODELS = {"pi": "openai-codex/gpt-6.1-sol:high", "opencode": "openai/gpt-6.1-sol
 ])
 def test_review_finishes_without_an_interactive_agent_prompt(cli, tmp_path, tool, mode, model):
     agent_dir = tmp_path / "pi agent"
-    result, calls = cli("review", "owner/repo", "42", tool, *([model] if tool == "pi" else []),
+    result, calls = cli("review", "owner/repo", "42", tool, *([model] if tool in ("pi", "opencode") else []),
                         PI_CODING_AGENT_DIR=str(agent_dir))
     assert result.returncode == 0, result.stderr
     args = next(args for name, *args in calls if name == tool)
@@ -184,6 +184,8 @@ def test_review_finishes_without_an_interactive_agent_prompt(cli, tmp_path, tool
         assert args[args.index("--append-system-prompt", args.index("--append-system-prompt") + 1) + 1] == str(ROOT / "ghd/pi/orchestrator.md")
     elif tool == "opencode":
         assert args[args.index("--agent") + 1] == "pr-review"
+        assert "--standalone" in args and "--auto" not in args
+        assert args[args.index("--format") + 1] == "json"
     else:
         assert args[args.index("--mcp-config") + 1] == str(ROOT / "ghd/mcp.json")
         allowed = args[args.index("--allowedTools") + 1].split(",")
@@ -330,9 +332,9 @@ def test_review_brief_points_at_the_previous_review_of_the_same_pr(cli, tmp_path
 
 
 @pytest.mark.parametrize("choice, review_args", [
-    ({"action": "review", "model": "openai-codex/gpt-6.1-sol:high"}, ["pi", "openai-codex/gpt-6.1-sol:high", "--instructions", ""]),
-    ({"action": "review", "model": "claude-bridge/claude-opus-5-5:high", "instructions": "Only src/, it's #1\nskip $HOME"},
-     ["pi", "claude-bridge/claude-opus-5-5:high", "--instructions", "Only src/, it's #1\nskip $HOME"]),
+    ({"action": "review", "model": "openai/gpt-6.1-sol#high"}, ["opencode", "openai/gpt-6.1-sol#high", "--instructions", ""]),
+    ({"action": "review", "model": "claude-agent/opus#high", "instructions": "Only src/, it's #1\nskip $HOME"},
+     ["opencode", "claude-agent/opus#high", "--instructions", "Only src/, it's #1\nskip $HOME"]),
 ])
 def test_menu_launches_review_in_the_dashboard_popup(cli, choice, review_args):
     result, calls = cli("review", "owner/repo", "42", MENU_CHOICE=json.dumps(choice))
@@ -355,14 +357,14 @@ def test_review_instructions_reach_the_reviewer_and_the_saved_metadata(cli, tmp_
     assert meta["instructions"] == instructions
 
 
-@pytest.mark.parametrize("key, model", [("ctrl+g", "claude-bridge/claude-opus-5-5:high"), ("ctrl+t", "openai-codex/gpt-6.1-sol:high")])
+@pytest.mark.parametrize("key, model", [("ctrl+g", "claude-agent/opus#high"), ("ctrl+t", "openai/gpt-6.1-sol#high")])
 def test_review_shortcuts_run_in_the_dashboard_popup(cli, key, model):
     command = [arg.replace("{{.RepoName}}", "owner/repo").replace("{{.PrNumber}}", "42")
                for arg in key_command(key)]
     result, calls = cli(*command[1:])
     assert result.returncode == 0, result.stderr
     popup = next(args for name, *args in calls if name == "tmux" and args[0] == "display-popup")
-    assert shlex.split(popup[-1])[-4:] == ["owner/repo", "42", "pi", model]
+    assert shlex.split(popup[-1])[-4:] == ["owner/repo", "42", "opencode", model]
     assert not any(name == "osascript" for name, *_ in calls)
 
 
