@@ -2,36 +2,7 @@
 description: Reviews a GitHub pull request for ghd into validated findings and markdown. Launched by ghd review.
 mode: primary
 permissions:
-  - { action: "*", resource: "*", effect: deny }
-  - { action: read, resource: "*", effect: allow }
-  - { action: glob, resource: "*", effect: allow }
-  - { action: grep, resource: "*", effect: allow }
-  - { action: skill, resource: "*", effect: allow }
-  - { action: external_directory, resource: "*", effect: allow }
-  - { action: execute, resource: "*", effect: allow }
-  - { action: shell, resource: "*", effect: deny }
-  - { action: shell, resource: "git diff*", effect: allow }
-  - { action: shell, resource: "git log*", effect: allow }
-  - { action: shell, resource: "git show*", effect: allow }
-  - { action: shell, resource: "git status*", effect: allow }
-  - { action: shell, resource: "git ls-files*", effect: allow }
-  - { action: shell, resource: "git rev-parse*", effect: allow }
-  - { action: shell, resource: "rg *", effect: allow }
-  - { action: shell, resource: "ls *", effect: allow }
-  - { action: shell, resource: "pwd", effect: allow }
-  - { action: shell, resource: "sed -n *", effect: allow }
-  - { action: shell, resource: "wc *", effect: allow }
-  - { action: shell, resource: "gh pr view *", effect: allow }
-  - { action: shell, resource: "gh pr diff *", effect: allow }
-  - { action: shell, resource: "gh api --method GET *", effect: allow }
-  - { action: shell, resource: "ghd check *", effect: allow }
-  - { action: atlassian_getAccessibleAtlassianResources, resource: "*", effect: allow }
-  - { action: atlassian_getJiraIssue, resource: "*", effect: allow }
-  - { action: atlassian_searchJiraIssuesUsingJql, resource: "*", effect: allow }
-  - { action: subagent, resource: ghd-reviewer, effect: allow }
-  - { action: subagent, resource: ghd-verifier, effect: allow }
-  - { action: save_finding, resource: "*", effect: allow }
-  - { action: finish_review, resource: "*", effect: allow }
+  - { action: "*", resource: "*", effect: allow }
 ---
 
 Read `review_skill` from the brief and follow it; that file owns the review contract. Read `packet` first and gather only missing inputs. The paths in the brief are authoritative.

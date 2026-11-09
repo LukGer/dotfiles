@@ -58,8 +58,8 @@ repository `.agents/skills` are discovered automatically.
 [skills](https://opencode.ai/v2/docs/skills/)
 
 V2 uses ordered `permissions` rules with `action`, `resource` and `effect`.
-Specialists have their own rules, so each review agent explicitly denies
-unlisted actions and allows inspection commands. The native `subagent` tool
+Specialists have their own rules, so each review agent explicitly allows all
+tools; the review instructions and plugin enforce the review contract. The native `subagent` tool
 inherits the review model when neither its call nor agent specifies a model.
 Verification calls explicitly select the brief's `verification_model` (Luna or
 Haiku by default, overridden with `GHD_VERIFY_MODEL`). The review plugin permits
