@@ -154,44 +154,35 @@ def test_live_review_shows_progress_above_the_agent(live_review, tmp_path):
 
 @pytest.mark.skipif(not shutil.which("tmux"), reason="needs tmux")
 @pytest.mark.parametrize("events, expected, exit_code", [
-    ([{"type": "stream_event", "event": {"delta": {"type": "text_delta", "text": "Checking café…"}}},
-      {"type": "assistant", "message": {"content": [{"type": "text", "text": "Checking café…"}]}},
-      {"type": "result", "is_error": False, "result": "Checking café…"}], "Checking café…", 0),
-    ([{"type": "assistant", "message": {"content": [
-        {"type": "tool_use", "name": "Bash", "input": {"command": "git diff"}},
-    ]}}], "Bash: git diff", 0),
-    ([{"type": "assistant", "message": {"content": [
-        {"type": "tool_use", "name": "Read", "input": {"file_path": "/repo/src/app.py"}},
-    ]}}], "Read: /repo/src/app.py", 0),
-    ([{"type": "result", "is_error": True, "errors": ["Review request failed"]}], "Review request failed", 7),
-    ([{"type": "assistant", "message": {"content": [
-        {"type": "tool_use", "name": "Agent", "input": {"description": "Review accessibility"}},
-    ]}}], "Agent: Review accessibility", 130),
+    ([{"type": "text", "part": {"text": "Checking café…"}}], "Checking café…", 0),
+    ([{"type": "tool_use", "part": {"tool": "shell", "state": {"input": {"command": "git diff"}}}}], "shell: git diff", 0),
+    ([{"type": "tool_use", "part": {"tool": "read", "state": {"input": {"path": "/repo/src/app.py"}}}}], "read: /repo/src/app.py", 0),
+    ([{"type": "text", "part": {"text": "Checking before failure"}}], "Checking before failure", 7),
+    ([{"type": "tool_use", "part": {"tool": "subagent", "state": {"input": {"description": "Review accessibility"}}}}], "subagent: Review accessibility", 130),
 ])
-def test_claude_output_is_visible_before_the_review_finishes(live_review, tmp_path, events, expected, exit_code):
-    claude = tmp_path / "claude"
-    claude.write_text(f"#!{sys.executable}\n" + """
+def test_opencode_output_is_visible_before_the_review_finishes(live_review, tmp_path, events, expected, exit_code):
+    opencode = tmp_path / "opencode"
+    opencode.write_text(f"#!{sys.executable}\n" + """
 import os, pathlib, sys, time
 assert sys.stdin.read() == ''
-assert sys.argv[sys.argv.index('--output-format') + 1] == 'stream-json'
-assert '--verbose' in sys.argv and '--include-partial-messages' in sys.argv
-print(os.environ['CLAUDE_EVENTS'], flush=True)
+assert sys.argv[sys.argv.index('--format') + 1] == 'json'
+print(os.environ['OPENCODE_EVENTS'], flush=True)
 pathlib.Path(sys.argv[-3]).write_text(os.environ['TMUX'].split(',')[0])
 while not pathlib.Path(sys.argv[-2]).exists():
     time.sleep(.01)
 sys.exit(int(sys.argv[-1]))
 """)
-    claude.chmod(0o755)
+    opencode.chmod(0o755)
     review = live_review(
-        exit_code, agent_command=[sys.executable, str(RUNNER.with_name("claude.py"))],
+        exit_code, agent_command=[sys.executable, str(RUNNER.with_name("opencode.py")), "--format", "json"],
         PATH=f"{tmp_path}:{os.environ['PATH']}",
-        CLAUDE_EVENTS="\n".join(json.dumps(event) for event in events),
+        OPENCODE_EVENTS="\n".join(json.dumps(event) for event in events),
         GHD_PROGRESS=str(tmp_path / "review.progress"),
     )
     review.wait_for(lambda: expected in review.tmux("capture-pane", "-p", "-t", "1"))
     output = review.tmux("capture-pane", "-p", "-t", "1")
     assert output.count(expected) == 1, output
-    assert '"type"' not in output
+    assert '\"type\"' not in output
     assert review.process.poll() is None, "output appeared only after the agent exited"
     if exit_code == 130:
         os.write(review.master, b"\x03")

@@ -27,5 +27,5 @@ def test_json_events_render_text_tools_and_provider_errors(event, printed, error
 
 
 def test_review_plugin_validates_findings_and_enforces_read_only_access():
-    result = subprocess.run(["node", "--test", str(LIB / "opencode.test.ts")], capture_output=True, text=True)
+    result = subprocess.run(["node", "--test", str(LIB / "opencode.test.ts"), str(LIB / "review-lib.test.ts")], capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr

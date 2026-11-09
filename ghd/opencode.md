@@ -50,7 +50,8 @@ sessions would interrupt those sessions. [CLI commands](https://opencode.ai/v2/d
 
 Global agent files live in `~/.config/opencode/agents/`; plugins are discovered
 under `~/.config/opencode/plugins/`. `pr-review` is the primary agent,
-`ghd-reviewer` is the scoped specialist, and `ghd-chat` discusses the supplied
+`ghd-reviewer` is the scoped specialist, `ghd-verifier` checks candidate findings
+on a cheaper model, and `ghd-chat` discusses the supplied
 snapshot with every tool denied. Existing skills under `~/.agents/skills` and
 repository `.agents/skills` are discovered automatically.
 [Agents](https://opencode.ai/v2/docs/agents/), [plugins](https://opencode.ai/v2/docs/plugins/),
@@ -60,7 +61,11 @@ V2 uses ordered `permissions` rules with `action`, `resource` and `effect`.
 Specialists have their own rules, so each review agent explicitly denies
 unlisted actions and allows inspection commands. The native `subagent` tool
 inherits the review model when neither its call nor agent specifies a model.
-Independent foreground calls can run together; in 2.2.5 this tool is direct
+Verification calls explicitly select the brief's `verification_model` (Luna or
+Haiku by default, overridden with `GHD_VERIFY_MODEL`). The review plugin permits
+one fresh foreground verification batch and one escalation on the review model;
+follow-ups and additional batches are rejected. Discovery still inherits the
+selected review model. Independent foreground calls can run together; in 2.2.5 this tool is direct
 and is not in Code Mode's catalog. [Permissions](https://opencode.ai/v2/docs/permissions/),
 [tagged subagent source](https://github.com/anomalyco/opencode/blob/v2.2.5/packages/core/src/tool/plugin/subagent.ts)
 

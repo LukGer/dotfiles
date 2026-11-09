@@ -8,17 +8,24 @@ import (
 	"strings"
 )
 
+type Verification struct {
+	Model   string `json:"model"`
+	Verdict string `json:"verdict"`
+	Reason  string `json:"reason"`
+}
+
 // Finding mirrors one entry of a ghd findings file.
 type Finding struct {
-	File      string `json:"file"`
-	Line      int    `json:"line"`
-	StartLine int    `json:"start_line,omitempty"`
-	Anchor    string `json:"anchor"`
-	Category  string `json:"category"`
-	Severity  string `json:"severity"`
-	Title     string `json:"title"`
-	Comment   string `json:"comment"`
-	Detail    string `json:"detail,omitempty"`
+	File         string         `json:"file"`
+	Line         int            `json:"line"`
+	StartLine    int            `json:"start_line,omitempty"`
+	Anchor       string         `json:"anchor"`
+	Category     string         `json:"category"`
+	Severity     string         `json:"severity"`
+	Title        string         `json:"title"`
+	Comment      string         `json:"comment"`
+	Detail       string         `json:"detail,omitempty"`
+	Verification []Verification `json:"verification,omitempty"`
 }
 
 // Review is a ghd findings file. Unknown keys survive a round trip through Extra.
@@ -51,6 +58,16 @@ const aiSuffix = "(added by AI)"
 
 // Preselected says whether a finding starts ticked, as ghd post does.
 func Preselected(f Finding) bool {
+	if len(f.Verification) > 0 {
+		for _, vote := range f.Verification {
+			if vote.Verdict == "refuted" {
+				return false
+			}
+		}
+		if f.Verification[len(f.Verification)-1].Verdict != "confirmed" {
+			return false
+		}
+	}
 	return f.Severity != "P3" && f.Category != "completeness"
 }
 

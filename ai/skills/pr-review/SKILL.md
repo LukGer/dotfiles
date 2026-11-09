@@ -3,16 +3,6 @@ name: pr-review
 description: Review a GitHub PR into categorised findings that `ghd post` turns into a pending review. Launched by `ghd review`.
 disable-model-invocation: true
 argument-hint: "<owner/repo#pr> plus the brief from ghd review"
-hooks:
-  PreToolUse:
-    - matcher: "Agent|Task"
-      hooks:
-        - type: command
-          command: ghd progress claude
-  PostToolUse:
-    - hooks:
-        - type: command
-          command: ghd progress claude
 ---
 
 # PR review
@@ -69,7 +59,9 @@ Without `local-review`, make one pass over the gathered diff for bugs and logic 
 
 ### Verify and consolidate
 
-Make one parent verification pass over the candidates: check the cited behavior and its introduction in the pinned diff, collapse overlapping findings, and retain the strongest supported severity. Use the specialists' evidence and targeted source reads, not a repeat of their investigations. Follow up only on a named unresolved question that could change a finding; a newly discovered material defect still merits verification. Drop unsupported candidates with a short reason. A clean PR is a valid result.
+Consolidate overlapping candidates and remove points already on the PR before verification. When candidates remain, read `verification_guidelines` from the brief and dispatch one fresh batch on `verification_model`. That file owns the verifier contract and token limits. Share the deduplicated candidates, relevant hunks, pinned window, requirements needed for their claims, and the human's instructions; omit the full packet and other reviewers' votes. Use OpenCode’s `ghd-verifier` subagent with the configured model explicitly.
+
+Retain the verifier's model, verdict and reason in each finding's optional `verification` array. Keep refuted and uncertain candidates inspectable with the evidence; they start unticked. A missing or failed verification becomes `uncertain` with the access/error reason, never a clean bill of health. Use targeted parent reads to resolve concrete questions, rather than repeating the whole review. A clean PR needs no verifier call.
 
 **Re-review.** When the brief names `previous_findings`, read it and `git diff <previous_sha> <head>`. Sort each previous finding into *fixed* (the change addresses it), *open* (unchanged, still a finding), or *dropped* (no longer applies, or a thread on the PR settled it). Open findings not yet on the PR stay in `findings_file`; fixed and dropped ones appear only in the markdown. New findings in code the author did not touch since `previous_sha` are still findings, but say so.
 
@@ -101,7 +93,8 @@ Every finding carries two axes:
       "severity": "P1",
       "title": "Short title",
       "comment": "The text to post.",
-      "detail": "Evidence for the human: quoted lines and the reasoning, markdown."
+      "detail": "Evidence for the human: quoted lines and the reasoning, markdown.",
+      "verification": [{"model": "model used", "verdict": "confirmed", "reason": "Decisive evidence."}]
     }
   ]
 }

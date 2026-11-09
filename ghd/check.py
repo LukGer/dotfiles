@@ -42,6 +42,14 @@ def problems(data, head: str | None = None, cwd: str | None = None) -> list[str]
         for key, allowed in (("category", CATEGORIES), ("severity", SEVERITIES)):
             if key not in missing and finding[key] not in allowed:
                 found.append(f"finding {n}: {key} {finding[key]} is not one of {', '.join(allowed)}")
+        if "verification" in finding:
+            votes = finding["verification"]
+            if (not isinstance(votes, list) or not 1 <= len(votes) <= 2
+                    or any(not isinstance(v, dict)
+                           or v.get("verdict") not in ("confirmed", "refuted", "uncertain")
+                           or any(not isinstance(v.get(k), str) or not v[k].strip() for k in ("model", "reason"))
+                           for v in votes)):
+                found.append(f"finding {n}: verification needs one or two model verdicts with reasons")
         start = finding.get("start_line")
         if start is not None and (not isinstance(start, int) or "line" in missing or start >= finding["line"]):
             found.append(f"finding {n}: start_line must be below line")

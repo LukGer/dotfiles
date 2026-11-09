@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -66,5 +67,44 @@ func TestSaveReviewKeepsUnknownKeys(t *testing.T) {
 	json.Unmarshal(data, &whole)
 	if whole["dropped"] == nil || whole["findings"].([]any)[0].(map[string]any)["comment"] != "new" || whole["tldr"] != "T" {
 		t.Fatalf("got %s", data)
+	}
+}
+
+func TestVerificationSelectionAndRoundTrip(t *testing.T) {
+	for _, tc := range []struct {
+		verdicts []string
+		selected bool
+	}{
+		{[]string{"confirmed"}, true}, {[]string{"uncertain"}, false}, {[]string{"refuted"}, false},
+		{[]string{"uncertain", "confirmed"}, true}, {[]string{"refuted", "confirmed"}, false},
+		{[]string{"confirmed", "uncertain"}, false},
+	} {
+		t.Run(fmt.Sprint(tc.verdicts), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "review.findings")
+			votes := []map[string]string{}
+			for _, verdict := range tc.verdicts {
+				votes = append(votes, map[string]string{"model": "luna", "verdict": verdict, "reason": "Evidence."})
+			}
+			data, _ := json.Marshal(map[string]any{"tldr": "Review", "findings": []any{map[string]any{"file": "a", "line": 1, "category": "bug", "severity": "P1", "verification": votes}}})
+			os.WriteFile(path, data, 0o644)
+			review, err := LoadReview(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := Preselected(review.Findings[0]); got != tc.selected {
+				t.Fatalf("preselected %v, want %v", got, tc.selected)
+			}
+			if err := SaveReview(path, review); err != nil {
+				t.Fatal(err)
+			}
+			saved, _ := os.ReadFile(path)
+			var whole map[string]any
+			json.Unmarshal(saved, &whole)
+			finding := whole["findings"].([]any)[0].(map[string]any)
+			savedVotes, ok := finding["verification"].([]any)
+			if !ok || len(savedVotes) != len(votes) {
+				t.Fatalf("lost verdicts: %s", saved)
+			}
+		})
 	}
 }

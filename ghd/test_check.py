@@ -65,3 +65,16 @@ def test_cli(tmp_path, content, code, message):
                             capture_output=True, text=True)
     assert result.returncode == code
     assert message in result.stdout
+
+
+@pytest.mark.parametrize("verification, valid", [
+    ([{"model": "luna", "verdict": "confirmed", "reason": "Reachable caller."}], True),
+    ([{"model": "haiku", "verdict": "uncertain", "reason": "Missing requirements."}], True),
+    ([{"model": "luna", "verdict": "refuted", "reason": "Guard handles it."}], True),
+    ([], False), ("confirmed", False),
+    ([{"model": "luna", "verdict": "yes", "reason": "Evidence."}], False),
+    ([{"model": "luna", "verdict": "confirmed", "reason": ""}], False),
+])
+def test_verification_evidence_is_validated(verification, valid):
+    found = check.problems({"tldr": "ok", "findings": [{**VALID, "verification": verification}]})
+    assert (not found) == valid

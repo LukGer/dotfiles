@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { blockedCommand, duplicateOf, renderMarkdown, specialistPrompt, summariseUsage } from "../review-lib.ts";
+import { blockedCommand, duplicateOf, renderMarkdown } from "./review-lib.ts";
 
 describe("blockedCommand", () => {
   const allowed = [
@@ -64,7 +64,7 @@ describe("renderMarkdown", () => {
     passes: [{ specialist: "correctness", status: "ran" }, { specialist: "deep", status: "skipped", note: "no trigger" }],
     coverage_gaps: ["Jira unavailable"],
   };
-  const md = renderMarkdown(review, { repo: "o/r", pr: 7, title: "T", tool: "pi", model: "openai-codex/gpt-6.1-sol:high", sha: "abcdef1234" });
+  const md = renderMarkdown(review, { repo: "o/r", pr: 7, title: "T", tool: "opencode", model: "openai/gpt-6.1-sol#high", sha: "abcdef1234" });
 
   test("orders findings by severity with pointers", () => {
     const rows = md.split("\n").filter((l) => /^\| \d /.test(l));
@@ -73,46 +73,18 @@ describe("renderMarkdown", () => {
     assert.match(rows[1], /\| 2 \| quality \| P3 \| a\.ts:10 \| Rename it\. \|/);
   });
   for (const expected of ["# o/r#7 T", "Looks good apart from one bug.", "| Unused import | already on the PR |",
-    "| Old crash | fixed |", "correctness ran", "deep skipped (no trigger)", "- Jira unavailable", "abcdef1 · pi openai-codex/gpt-6.1-sol:high"]) {
+    "| Old crash | fixed |", "correctness ran", "deep skipped (no trigger)", "- Jira unavailable", "abcdef1 · opencode openai/gpt-6.1-sol#high"]) {
     test(`contains ${expected}`, () => assert.ok(md.includes(expected), md));
   }
   test("omits empty sections", () => {
-    const bare = renderMarkdown({ tldr: "Clean.", findings: [] }, { repo: "o/r", pr: 1, title: "T", tool: "pi", model: "m", sha: "abc" });
+    const bare = renderMarkdown({ tldr: "Clean.", findings: [] }, { repo: "o/r", pr: 1, title: "T", tool: "opencode", model: "m", sha: "abc" });
     assert.ok(!bare.includes("Dropped") && !bare.includes("Since last review") && bare.includes("No findings."));
   });
   for (const [instructions, quoted] of [["", null], ["Only src/.\nSkip tests.", "> **Instructions:** Only src/.\n> Skip tests."]] as const) {
     test(`quotes the human's instructions: ${JSON.stringify(instructions)}`, () => {
-      const scoped = renderMarkdown({ tldr: "Clean.", findings: [] }, { repo: "o/r", pr: 1, title: "T", tool: "pi", model: "m", sha: "abc", instructions });
+      const scoped = renderMarkdown({ tldr: "Clean.", findings: [] }, { repo: "o/r", pr: 1, title: "T", tool: "opencode", model: "m", sha: "abc", instructions });
       assert.equal(scoped.includes("Instructions"), quoted !== null);
-      if (quoted) assert.ok(scoped.includes(`abc · pi m\n\n${quoted}\n\nClean.`), scoped);
+      if (quoted) assert.ok(scoped.includes(`abc · opencode m\n\n${quoted}\n\nClean.`), scoped);
     });
   }
-});
-
-describe("specialistPrompt", () => {
-  const pass = { specialist: "security", scope: "a.ts:1-20" };
-  const run = { packet: "/r.packet.md", head: "abc" };
-  for (const [name, params, extra, expected, absent] of [
-    ["generic pass", pass, {}, ["Specialist pass: security", "Packet: /r.packet.md", "Head: abc", "Scope:\na.ts:1-20"], ["skill", "Instructions"]],
-    ["repository skill", { ...pass, skill: ".agents/skills/x/SKILL.md" }, {}, [".agents/skills/x/SKILL.md; its references"], ["Instructions"]],
-    ["human instructions", pass, { instructions: "Ignore gen/." }, ["Instructions from the human who requested this review"], []],
-  ] as const) {
-    test(name, () => {
-      const prompt = specialistPrompt(params, { ...run, ...extra });
-      for (const text of expected) assert.ok(prompt.includes(text), prompt);
-      for (const text of absent) assert.ok(!prompt.includes(text), prompt);
-      if ("instructions" in extra) assert.ok(prompt.endsWith(extra.instructions), prompt);
-    });
-  }
-});
-
-describe("summariseUsage", () => {
-  test("sums assistant usage and keeps the last error", () => {
-    const events = [
-      { type: "message_end", message: { role: "assistant", usage: { input: 10, output: 2, cacheRead: 5, cacheWrite: 0, cost: { total: 0.01 } } } },
-      { type: "message_end", message: { role: "user" } },
-      { type: "message_end", message: { role: "assistant", stopReason: "error", errorMessage: "boom", usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 1, cost: { total: 0.02 } } } },
-    ];
-    assert.deepEqual(summariseUsage(events), { turns: 2, input: 11, output: 3, cacheRead: 5, cacheWrite: 1, cost: 0.03, error: "boom" });
-  });
 });

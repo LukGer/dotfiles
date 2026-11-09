@@ -406,21 +406,12 @@ func (m *model) resumeCommand() (*exec.Cmd, string) {
 	if _, err := os.Stat(m.meta.Cwd); err != nil {
 		return nil, "no conversation to continue: its worktree is gone"
 	}
-	var cmd *exec.Cmd
-	switch m.meta.Tool {
-	case "pi":
-		cmd = exec.Command("pi", "--session", m.meta.Session)
-	case "claude":
-		cmd = exec.Command("claude", "--resume", m.meta.Session, "--setting-sources", "user", "--mcp-config", filepath.Join(m.lib, "mcp.json"), "--add-dir", filepath.Dir(m.out))
-	case "opencode":
-		cmd = exec.Command("opencode", "--session", m.meta.Session, "--standalone")
-	default:
+	if m.meta.Tool != "opencode" {
 		return nil, "no conversation to continue for " + m.meta.Tool
 	}
+	cmd := exec.Command("opencode", "--session", m.meta.Session, "--standalone")
 	cmd.Dir = m.meta.Cwd
-	if m.meta.Tool == "opencode" {
-		cmd.Env = append(os.Environ(), "GHD_REVIEW="+m.out)
-	}
+	cmd.Env = append(os.Environ(), "GHD_REVIEW="+m.out)
 	return cmd, ""
 }
 
@@ -475,6 +466,9 @@ func (m *model) renderDetail() {
 		b.WriteString(bold.Render(fmt.Sprintf("%s %s  %s", f.Severity, f.Category, Pointer(f))) + "\n")
 		b.WriteString(bold.Render(f.Title) + "\n\n")
 		b.WriteString(CommentText(f) + "\n")
+		for _, vote := range f.Verification {
+			b.WriteString("\n" + dim.Render("verification: "+vote.Verdict+" ("+vote.Model+")") + "\n" + vote.Reason + "\n")
+		}
 		if lines := Context(m.files, f.File, f.Line, 8); lines != nil {
 			b.WriteString("\n" + dim.Render("diff at head") + "\n")
 			for _, line := range lines {

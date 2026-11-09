@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { blockedCommand, CATEGORIES, duplicateOf, renderMarkdown, SEVERITIES, type Finding, type Review, type Meta } from "./review-lib.ts";
+import { blockedCommand, CATEGORIES, duplicateOf, renderMarkdown, SEVERITIES, VERDICTS, verificationBudget, type Finding, type Review, type Meta } from "./review-lib.ts";
 
 const object = (properties: Record<string, unknown>, required = Object.keys(properties)) => ({ type: "object", properties, required, additionalProperties: false });
 const string = { type: "string" };
@@ -10,6 +10,7 @@ const strings = { type: "array", items: string };
 const finding = object({
   file: string, line: { type: "integer" }, start_line: { type: "integer" }, anchor: string,
   category: { enum: CATEGORIES }, severity: { enum: SEVERITIES }, title: string, comment: string, detail: string,
+  verification: { type: "array", minItems: 1, maxItems: 2, items: object({ model: string, verdict: { enum: VERDICTS }, reason: string }) },
 }, ["file", "line", "anchor", "category", "severity", "title", "comment"]);
 const dropped = { type: "array", items: object({ candidate: string, reason: string }) };
 
@@ -48,6 +49,7 @@ export default {
         });
       } finally { rmSync(directory, { recursive: true, force: true }); }
     };
+    const spendVerification = verificationBudget(meta.verification_model ?? "openai/gpt-6-luna", meta.model);
     const registrations = [];
     registrations.push(await ctx.tool.hook("execute.before", async (event) => {
       if (["edit", "write", "patch", "opencode_worktree_create", "opencode_worktree_remove", "opencode_session_move"].includes(event.tool)) throw new Error("Review is read-only; save findings through save_finding.");
@@ -55,7 +57,12 @@ export default {
         const reason = blockedCommand(event.input?.command ?? "");
         if (reason) throw new Error(`Review is read-only: ${reason}`);
       }
-      if (event.tool === "subagent" && event.input?.agent !== "ghd-reviewer") throw new Error("Review passes must use ghd-reviewer.");
+      if (event.tool === "subagent") {
+        if (event.input?.agent === "ghd-verifier") {
+          if (event.input.sessionID || event.input.background) throw new Error("Verification uses one fresh foreground batch, without follow-ups.");
+          spendVerification(event.input.model);
+        } else if (event.input?.agent !== "ghd-reviewer") throw new Error("Review passes must use ghd-reviewer or ghd-verifier.");
+      }
     }));
     registrations.push(await ctx.tool.transform((editor) => {
       editor.add({

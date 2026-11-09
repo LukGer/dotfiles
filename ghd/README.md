@@ -118,11 +118,11 @@ exits the minimal interface when the input is empty.
 Use OpenCode **2.2.5 or newer** and Claude Code **2.1.248 or newer** for
 Claude subscription reviews. See [OpenCode setup and sources](opencode.md).
 
-`ghd review <owner/repo> <pr> [opencode [provider/model#variant] | pi [provider/model[:thinking]] | claude] [--instructions <text>]`
+`ghd review <owner/repo> <pr> [opencode [provider/model#variant]] [--instructions <text>]`
 also works from any shell. The dashboard uses OpenCode with
 `openai/gpt-6.1-sol#high` or `claude-agent/opus#high`. Opus follows Claude Code's
-advertised alias; it is not pinned to a guessed model identifier. `pi` and
-`claude` remain optional shell fallbacks. Human instructions end the brief,
+advertised alias; it is not pinned to a guessed model identifier. Reviews run
+only through OpenCode. Human instructions end the brief,
 reach every specialist verbatim, and appear in the saved metadata and review.
 
 1. Fetches the PR into your clone at `~/dev/<repo>` (`GHD_CODE_DIR` overrides
@@ -151,6 +151,26 @@ reach every specialist verbatim, and appear in the saved metadata and review.
    is recorded as a coverage gap. Re-reviews receive the previous findings and
    commit, classify each finding as fixed, open or dropped, and skip points
    already discussed on GitHub.
+
+   After discovery, the parent deduplicates candidates and sends one compact
+   batch to a fresh cheaper verifier: Luna for OpenAI reviews, Haiku for Claude
+   reviews. Set `GHD_VERIFY_MODEL` to override it using the chosen harness's
+   model syntax, for example:
+
+   ```sh
+   GHD_VERIFY_MODEL=claude-agent/haiku ghd review owner/repo 42 opencode
+   ```
+
+   The verifier checks supplied claims with targeted reads, returning confirmed,
+   refuted or uncertain with a short reason. The full packet and discovery
+   transcripts stay out of its context. At most one escalation batch on the
+   selected review model checks disputed P0/P1 findings; there are no debate
+   loops. OpenCode enforces the two-stage dispatch limit. The six additional-read
+   limit is an instruction to the verifier, not a hard token cap. Unavailable
+   verification stays uncertain. Verdicts and model attribution remain in the
+   saved findings and evidence pane; disputed or uncertain findings start
+   unticked, and contradictory votes remain unticked even after escalation.
+   Older reviews without verification retain their previous selection behavior.
 
 4. The findings file at `~/.local/share/gh-dash-reviews/` (`GHD_STORE`
    overrides) holds the TLDR and findings, each with a category (`bug`,
@@ -197,18 +217,12 @@ Ghostty's `bell-features = system` setting plays the macOS alert sound.
 To save an additional review from a separate agent conversation, use
 `ghd save <repo> <pr> <tool> <markdown file> <findings file>`.
 
-### Optional Pi fallback
-
-`ghd review owner/repo 42 pi <provider/model[:thinking]>` retains the isolated
-Pi extension and existing Pi authentication. The dashboard and PR chat do not
-require Pi or `pi-claude-bridge`.
-
 ## Posting
 
 `ghd post <owner/repo> <pr> [--dry] [--pick 1,3]`, or `ctrl+o`:
 
-1. Pick the review, then tick findings. P0–P2 start ticked; nitpicks and
-   completeness start unticked. The preview shows the exact comment.
+1. Pick the review, then tick findings. Confirmed P0–P2 start ticked; nitpicks,
+   completeness and disputed/uncertain findings start unticked. The preview shows the exact comment.
 2. Each line is checked against the live PR diff and moved by its anchor text
    when the PR changed. A finding that cannot be placed becomes a whole-file
    comment, or a line in the review body when its file is not in the diff.
@@ -239,18 +253,15 @@ with its message and the 1-based positions that were successfully posted.
 | `review` | menu dispatch, instructions, worktree, packet, agent launch, cleanup |
 | `chat.py` | model picker and interactive OpenCode conversation over a PR description and diff, without a checkout |
 | `packet.py`, `test_packet.py` | the review packet every reviewer reads |
-| `pi/review.ts`, `review-lib.ts`, `pi/lib.test.ts` | pi extension: `review_pass`, `save_finding`, `finish_review`, the read-only guard, progress events; pure helpers tested with `node --test` |
-| `pi/orchestrator.md`, `pi/specialist.md`, `specialists/` | system prompt additions for the orchestrator, every pass, and the generic specialist checklists |
+| `review-lib.ts`, `review-lib.test.ts` | shared validation, verification budget and markdown helpers, tested with `node --test` |
+| `specialists/`, `verification.md` | generic specialist checklists and the bounded verification contract |
 | `opencode-plugin.ts`, `opencode.test.ts` | validated review persistence and read-only guards for OpenCode |
 | `opencode.py`, `test_opencode.py` | render V2 events and verify the plugin |
-| `pi.py`, `test_pi.py` | stream pi's JSON events off a terminal and fail on provider errors |
 | `tui`, `reviewtui/` | menus, pickers, message and review screens: cached Go build, Bubble Tea program with its own `go test` suite |
-| `noninteractive.py` | run claude and opencode with stdin closed, suppress typing and restore terminal input |
-| `claude.py` | render Claude's streaming text and tool calls while preserving its exit status |
-| `progress.py`, `progress-plugin.ts` | progress events (`<review>.progress`) from Claude hooks and the OpenCode plugin, and the pane above those agents; the pi extension writes the same events itself; `test_progress.py` covers both |
+| `noninteractive.py` | run OpenCode with stdin closed, suppress typing and restore terminal input |
+| `progress.py`, `progress-plugin.ts` | progress events (`<review>.progress`) from the OpenCode plugin and the live progress pane; covered by `test_progress.py` |
 | `view` | open a saved review in the review screen, or print it off a terminal |
 | `check.py` | findings validator shared by the agents, `save_finding` and `review`; `test_check.py` covers it |
-| `mcp.json` | Atlassian MCP server for Claude's Jira reads |
 | `config/opencode/agents/pr-review.md` | the OpenCode agent `review` launches |
 | `post.py` | saved-review dispatch, noninteractive posting, and pending-review GraphQL; `test_post.py` covers posting and placement |
 | `history.py`, `save.py` | past reviews with their duration; ad-hoc saves |

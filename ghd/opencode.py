@@ -4,7 +4,13 @@ import json
 import subprocess
 import sys
 
-from pi import detail
+DETAIL_KEYS = ("specialist", "description", "title", "path", "command", "pattern", "code")
+
+
+def detail(args: dict) -> str:
+    value = next((args[key] for key in DETAIL_KEYS if args.get(key)), "")
+    first = str(value).strip().splitlines()[0] if value else ""
+    return f"{first[:100]}…" if len(first) > 100 else first
 
 
 def render(line, out):
@@ -18,7 +24,7 @@ def render(line, out):
         out.write(part.get("text", "") + "\n")
     elif event.get("type") == "tool_use":
         state = part.get("state") or {}
-        out.write(f"\n{part.get('tool', 'tool')}: {detail('', state.get('input') or {})}\n")
+        out.write(f"\n{part.get('tool', 'tool')}: {detail(state.get('input') or {})}\n")
     elif event.get("type") == "error":
         error = event.get("error") or {}
         return error.get("message") or error.get("data", {}).get("message") or "OpenCode reported an error"

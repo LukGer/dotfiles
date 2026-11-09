@@ -48,7 +48,7 @@ if name == 'gh':
         print('A review\\tauthor\\t1234567890\\tmain')
 elif name == 'git':
     sys.exit(1)
-elif name in ('opencode', 'claude', 'pi'):
+elif name == 'opencode':
     if args[0] in ('--session', '--resume'):
         print('CONVERSATION-READY', flush=True)
         sys.exit(0)
@@ -67,10 +67,10 @@ elif name == 'glow':
     os.execv(os.environ['REAL_GLOW'], ['glow', *args])
 """)
     stub.chmod(0o755)
-    for name in ("osascript", "gh", "git", "opencode", "claude", "pi", "glow"):
+    for name in ("osascript", "gh", "git", "opencode", "glow"):
         (tmp_path / name).symlink_to(stub)
     env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "TERM": "xterm-256color",
-           "MISE_DATA_DIR": str(tmp_path / "mise"),  # zshenv puts mise's shims first; keep the stubbed pi ahead of the real one
+           "MISE_DATA_DIR": str(tmp_path / "mise"),  # zshenv puts mise's shims first; keep stubbed tools ahead of installed tools
            "CALLS": str(record), "GHD_STORE": str(tmp_path / "reviews"),
            "RELEASE_AGENT": str(tmp_path / "release"),
            "REAL_GLOW": shutil.which("glow"), "REVIEW_PARAGRAPHS": str(paragraphs),

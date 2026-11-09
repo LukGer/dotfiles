@@ -26,7 +26,7 @@ def review_screen(prefix: str, *, dry: bool = False) -> None:
 
 
 def reviewer(meta: dict) -> str:
-    """`tool model` for a saved review, with the provider and thinking level dropped from pi models."""
+    """`tool model` for a saved review, with the provider and thinking level omitted."""
     model = (meta.get("model") or "").rsplit("/", 1)[-1].split(":")[0]
     return f"{meta['tool']} {model}".strip()
 

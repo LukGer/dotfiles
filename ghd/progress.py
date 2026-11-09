@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Live progress of a running review, fed by the harness rather than the agent.
 
-Usage: ghd progress claude            Claude Code hook: PreToolUse/PostToolUse JSON on stdin
-       ghd progress opencode          OpenCode plugin: {sessionID, phase, tool, input, output} on stdin
+Usage: ghd progress opencode          OpenCode plugin: {sessionID, phase, tool, input, output} on stdin
        ghd progress watch <file>      redraw the summary of a progress file every second
 
 Events are appended to <review>.progress next to the review whose metadata
@@ -21,19 +20,11 @@ STORE = os.environ.get("GHD_STORE") or os.path.expanduser("~/.local/share/gh-das
 CHECK = "ghd check"
 
 
-def normalise(harness: str, raw: dict) -> dict | None:
-    if harness == "claude":
-        after = raw.get("hook_event_name") == "PostToolUse"
-        session, tool, args = raw.get("session_id"), raw.get("tool_name"), raw.get("tool_input") or {}
-        response = raw.get("tool_response")
-        output = response.get("stdout", "") if isinstance(response, dict) else str(response or "")
-        agent, files, shell = tool in ("Agent", "Task"), tool in ("Edit", "Write"), tool == "Bash"
-        path = args.get("file_path")
-    else:
-        after = raw.get("phase") == "after"
-        session, tool, args, output = raw.get("sessionID"), raw.get("tool"), raw.get("input") or {}, raw.get("output") or ""
-        agent, files, shell = tool == "subagent", tool in ("edit", "write"), tool == "shell"
-        path = args.get("path")
+def normalise(raw: dict) -> dict | None:
+    after = raw.get("phase") == "after"
+    session, tool, args, output = raw.get("sessionID"), raw.get("tool"), raw.get("input") or {}, raw.get("output") or ""
+    agent, files, shell = tool == "subagent", tool in ("edit", "write"), tool == "shell"
+    path = args.get("path")
     event = {"session": session}
     if agent:
         return {**event, "kind": "agent_end" if after else "agent_start", "label": args.get("description") or tool}
@@ -56,8 +47,8 @@ def progress_file(session: str) -> str | None:
     return None
 
 
-def record(harness: str, raw: dict) -> None:
-    event = normalise(harness, raw)
+def record(raw: dict) -> None:
+    event = normalise(raw)
     file = event and progress_file(event["session"])
     if file:
         with open(file, "a") as out:
@@ -119,7 +110,7 @@ def main(argv: list[str]) -> None:
     if argv[:1] == ["watch"]:
         return watch(argv[1])
     try:
-        record(argv[0], json.load(sys.stdin))
+        record(json.load(sys.stdin))
     except (ValueError, OSError, IndexError, AttributeError):
         pass
 

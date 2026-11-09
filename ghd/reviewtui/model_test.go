@@ -33,8 +33,6 @@ func TestResumeBuildsTheReviewerCommand(t *testing.T) {
 		tool string
 		want []string
 	}{
-		{"pi", []string{"pi", "--session", "s1"}},
-		{"claude", []string{"claude", "--resume", "s1", "--setting-sources", "user", "--mcp-config", "/lib/mcp.json", "--add-dir"}},
 		{"opencode", []string{"opencode", "--session", "s1"}},
 	} {
 		m := savedReview(t, Meta{Repo: "o/r", PR: 1, Tool: tc.tool, Session: "s1", Cwd: cwd}, nil)
@@ -55,8 +53,8 @@ func TestResumeExplainsWhyItCannotContinue(t *testing.T) {
 		meta   Meta
 		status string
 	}{
-		{Meta{Tool: "pi"}, "saved by hand"},
-		{Meta{Tool: "pi", Session: "s", Cwd: "/nonexistent/worktree"}, "worktree is gone"},
+		{Meta{Tool: "opencode"}, "saved by hand"},
+		{Meta{Tool: "opencode", Session: "s", Cwd: "/nonexistent/worktree"}, "worktree is gone"},
 		{Meta{Tool: "codex", Session: "s", Cwd: os.TempDir()}, "codex"},
 	} {
 		m := savedReview(t, tc.meta, nil)
@@ -72,7 +70,7 @@ func TestPostPassesTheSelectedPositions(t *testing.T) {
 		{File: "b", Line: 2, Category: "bug", Severity: "P1", Title: "bug"},
 		{File: "c", Line: 3, Category: "bug", Severity: "P2", Title: "bug2"},
 	}
-	m := savedReview(t, Meta{Repo: "o/r", PR: 7, Tool: "pi"}, findings)
+	m := savedReview(t, Meta{Repo: "o/r", PR: 7, Tool: "opencode"}, findings)
 	cmd, _ := m.postCommand()
 	joined := strings.Join(cmd.Args, " ")
 	if cmd.Args[1] != "/lib/post.py" || !strings.Contains(joined, "o/r 7 --json --review") || !strings.HasSuffix(joined, "--pick 2,3") {
@@ -142,7 +140,7 @@ func TestPartialPostKeepsOnlyUnpostedFindingsSelected(t *testing.T) {
 
 func TestSelectionKeys(t *testing.T) {
 	findings := []Finding{{Severity: "P3", Category: "quality"}, {Severity: "P1", Category: "bug"}}
-	m := savedReview(t, Meta{Tool: "pi"}, findings)
+	m := savedReview(t, Meta{Tool: "opencode"}, findings)
 	if Picks(m.selected) != "2" {
 		t.Fatalf("preselection %q", Picks(m.selected))
 	}
@@ -183,7 +181,7 @@ func TestHeaderShowsTheInstructionsTheReviewRanWith(t *testing.T) {
 		{"", ""},
 		{"Only a.go.\n  Skip tests.", "Instructions: Only a.go. Skip tests."},
 	} {
-		m := savedReview(t, Meta{Repo: "o/r", PR: 1, Tool: "pi", Instructions: tc.instructions}, nil)
+		m := savedReview(t, Meta{Repo: "o/r", PR: 1, Tool: "opencode", Instructions: tc.instructions}, nil)
 		if got := strings.Contains(m.View(), "Instructions:"); got != (tc.want != "") || !strings.Contains(m.View(), tc.want) {
 			t.Fatalf("%q: view:\n%s", tc.instructions, m.View())
 		}

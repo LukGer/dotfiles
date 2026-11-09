@@ -8,7 +8,7 @@ test("review tools validate, deduplicate, and finish only in the orchestrator", 
   const directory = mkdtempSync(join(tmpdir(), "ghd-opencode-test-"));
   const out = join(directory, "review");
   process.env.GHD_REVIEW = out;
-  writeFileSync(`${out}.json`, JSON.stringify({ repo: "o/r", pr: 7, sha: "abc", session: "ses_ghdtest", cwd: directory, title: "Example", tool: "opencode", model: "openai/gpt-6.1-sol#high" }));
+  writeFileSync(`${out}.json`, JSON.stringify({ repo: "o/r", pr: 7, sha: "abc", session: "ses_ghdtest", cwd: directory, title: "Example", tool: "opencode", model: "openai/gpt-6.1-sol#high", verification_model: "openai/gpt-6-luna" }));
   const plugin = (await import("./opencode-plugin.ts")).default;
   const tools = new Map<string, any>();
   const hooks = new Map<string, any>();
@@ -24,12 +24,23 @@ test("review tools validate, deduplicate, and finish only in the orchestrator", 
   await assert.rejects(save(finding, { ...context, agent: "ghd-reviewer" }), /orchestrator/);
   await assert.rejects(save({ ...finding, category: "invalid" }), /category/);
   assert.equal(existsSync(`${out}.findings`), false);
-  await save(finding);
+  const verify = (input: any) => hooks.get("execute.before")({ tool: "subagent", input });
+  await assert.rejects(verify({ agent: "ghd-verifier", model: "openai/gpt-6.1-sol#high" }), /cheap|verification model/);
+  for (const extra of [{ sessionID: "old" }, { background: true }]) {
+    await assert.rejects(verify({ agent: "ghd-verifier", model: "openai/gpt-6-luna", ...extra }), /fresh foreground/);
+  }
+  await verify({ agent: "ghd-verifier", model: "openai/gpt-6-luna" });
+  await assert.rejects(verify({ agent: "ghd-verifier", model: "openai/gpt-6-luna" }), /already|once/);
+  await verify({ agent: "ghd-verifier", model: "openai/gpt-6.1-sol#high" });
+  await assert.rejects(verify({ agent: "ghd-verifier", model: "openai/gpt-6.1-sol#high" }), /already|once/);
+  await save({ ...finding, verification: [{ model: "openai/gpt-6-luna", verdict: "uncertain", reason: "Caller configuration unavailable." }] });
   await assert.rejects(save(finding), /duplicate/);
   const finish = tools.get("finish_review");
   await finish.execute({ tldr: "Fix the crash.", dropped: [], passes: [{ specialist: "correctness", status: "ran" }], coverage_gaps: [] }, context);
   assert.equal(JSON.parse(readFileSync(`${out}.findings`, "utf8")).findings.length, 1);
-  assert.match(readFileSync(`${out}.md`, "utf8"), /Fix the crash/);
+  const saved = JSON.parse(readFileSync(`${out}.findings`, "utf8"));
+  assert.equal(saved.findings[0].verification[0].verdict, "uncertain");
+  assert.match(readFileSync(`${out}.md`, "utf8"), /uncertain.*Caller configuration unavailable/);
   for (const [tool, input] of [["edit", { path: "a" }], ["shell", { command: "git commit -am x" }], ["subagent", { agent: "general" }]]) {
     await assert.rejects(hooks.get("execute.before")({ tool, input, sessionID: context.sessionID }), /read-only|ghd-reviewer/);
   }

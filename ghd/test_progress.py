@@ -13,29 +13,11 @@ progress = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(progress)
 
 
-def claude(event, tool, tool_input, response=None):
-    return {"hook_event_name": event, "session_id": "s1", "tool_name": tool,
-            "tool_input": tool_input, "tool_response": response}
-
-
 def opencode(phase, tool, tool_input, output=None):
     return {"sessionID": "s1", "phase": phase, "tool": tool, "input": tool_input, "output": output}
 
 
 @pytest.mark.parametrize("harness, raw, expected", [
-    ("claude", claude("PreToolUse", "Agent", {"description": "Security review", "subagent_type": "general-purpose"}),
-     {"kind": "agent_start", "label": "Security review"}),
-    ("claude", claude("PreToolUse", "Task", {"description": "Risk review"}), {"kind": "agent_start", "label": "Risk review"}),
-    ("claude", claude("PostToolUse", "Agent", {"description": "Security review"}), {"kind": "agent_end", "label": "Security review"}),
-    ("claude", claude("PostToolUse", "Edit", {"file_path": "/store/r.findings"}), {"kind": "file", "label": "/store/r.findings"}),
-    ("claude", claude("PostToolUse", "Write", {"file_path": "/store/r.md"}), {"kind": "file", "label": "/store/r.md"}),
-    ("claude", claude("PostToolUse", "Bash", {"command": "ghd check /store/r.findings --head abc"}, {"stdout": "ok: 3 finding(s)\n"}),
-     {"kind": "check", "ok": True}),
-    ("claude", claude("PostToolUse", "Bash", {"command": "ghd check /store/r.findings"}, {"stdout": "finding 1: anchor does not match"}),
-     {"kind": "check", "ok": False}),
-    ("claude", claude("PostToolUse", "Bash", {"command": "git diff"}, {"stdout": ""}), {"kind": "tool", "label": "Bash"}),
-    ("claude", claude("PreToolUse", "Bash", {"command": "git diff"}), None),
-    ("claude", claude("PostToolUse", "Read", {"file_path": "/x"}), {"kind": "tool", "label": "Read"}),
     ("opencode", opencode("before", "subagent", {"agent": "security-review", "description": "Security pass"}),
      {"kind": "agent_start", "label": "Security pass"}),
     ("opencode", opencode("after", "subagent", {"agent": "security-review", "description": "Security pass"}),
@@ -48,7 +30,7 @@ def opencode(phase, tool, tool_input, output=None):
     ("opencode", opencode("before", "read", {"path": "/x"}), None),
 ])
 def test_harness_events_normalise_to_review_progress(harness, raw, expected):
-    event = progress.normalise(harness, raw)
+    event = progress.normalise(raw)
     if expected is None:
         assert event is None
     else:
@@ -81,13 +63,12 @@ def test_summary_describes_the_review_phase(recorded, elapsed, expected):
 
 def saved_review(store, session):
     store.mkdir(exist_ok=True)
-    base = store / "20261021-120000__owner_repo__42__claude"
+    base = store / "20261021-120000__owner_repo__42__opencode"
     (base.with_suffix(".json")).write_text(json.dumps({"repo": "owner/repo", "pr": 42, "session": session}))
     return base.with_suffix(".progress")
 
 
 @pytest.mark.parametrize("harness, raw", [
-    ("claude", claude("PostToolUse", "Read", {"file_path": "/x"})),
     ("opencode", opencode("after", "read", {"path": "/x"})),
 ])
 @pytest.mark.parametrize("session, recorded", [("s1", True), ("other", False)])
@@ -103,7 +84,7 @@ def test_cli_appends_events_to_the_review_of_that_session(tmp_path, harness, raw
 
 
 def test_cli_ignores_input_it_cannot_parse(tmp_path):
-    run = subprocess.run([sys.executable, str(LIB / "progress.py"), "claude"], input="not json", text=True,
+    run = subprocess.run([sys.executable, str(LIB / "progress.py"), "opencode"], input="not json", text=True,
                          capture_output=True, env={"GHD_STORE": str(tmp_path), "PATH": "/usr/bin:/bin"})
     assert run.returncode == 0
 
@@ -136,11 +117,3 @@ await new Promise((resolve) => setTimeout(resolve, 500))
     if recorded:
         kinds = [json.loads(line)["kind"] for line in file.read_text().splitlines()]
         assert kinds == ["agent_start", "check", "tool"]
-
-
-def test_claude_hooks_in_the_skill_report_progress():
-    frontmatter = (LIB.parent / "ai/skills/pr-review/SKILL.md").read_text().split("---")[1]
-    assert "hooks:" in frontmatter
-    for event in ("PreToolUse", "PostToolUse"):
-        assert f"{event}:" in frontmatter
-    assert frontmatter.count("command: ghd progress claude") == 2

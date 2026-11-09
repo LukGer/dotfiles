@@ -2,11 +2,27 @@
 
 export const CATEGORIES = ["bug", "security", "risk", "quality", "design", "completeness"] as const;
 export const SEVERITIES = ["P0", "P1", "P2", "P3"] as const;
-export const SPECIALISTS = ["correctness", "deep", "security", "risk", "quality", "design", "completeness"] as const;
+
+export const VERDICTS = ["confirmed", "refuted", "uncertain"] as const;
+export type Verification = { model: string; verdict: typeof VERDICTS[number]; reason: string };
+
+export function verificationBudget(cheap: string, strong: string) {
+  let initial = false, escalated = false;
+  return (model: string) => {
+    if (!initial) {
+      if (model !== cheap) throw new Error(`Use the cheap verification model: ${cheap}`);
+      initial = true;
+    } else {
+      if (model === cheap || escalated) throw new Error("Verification already ran; each batch runs once, with at most one escalation.");
+      if (model !== strong) throw new Error(`Escalation must use the review model: ${strong}`);
+      escalated = true;
+    }
+  };
+}
 
 export type Finding = {
   file: string; line: number; start_line?: number; anchor: string;
-  category: string; severity: string; title: string; comment: string; detail?: string; specialist?: string;
+  category: string; severity: string; title: string; comment: string; detail?: string; specialist?: string; verification?: Verification[];
 };
 export type Review = {
   tldr: string;
@@ -16,7 +32,7 @@ export type Review = {
   passes?: { specialist: string; status: string; note?: string }[];
   coverage_gaps?: string[];
 };
-export type Meta = { repo: string; pr: number | string; title: string; tool: string; model: string; sha: string; instructions?: string };
+export type Meta = { repo: string; pr: number | string; title: string; tool: string; model: string; sha: string; instructions?: string; verification_model?: string };
 
 const GIT_WRITES = /\bgit\s+(-[^\s]+\s+)*(add|am|apply|branch\s+(-[dDmM]|--delete)|checkout|cherry-pick|clean|commit|fetch|merge|mv|pull|push|rebase|reset|restore|revert|rm|stash|switch|tag\s+-d|worktree)\b/;
 const FILE_WRITES = /\brm\s|\bmv\s|\btee\b|(^|[^&<>0-9])>>?(?!\s*(&|\/dev\/null))/;
@@ -49,8 +65,8 @@ export function renderMarkdown(review: Review, meta: Meta): string {
   lines.push(...(findings.length
     ? table(["#", "Category", "P", "Pointer", "Comment"], findings.map((f, i) => [String(i + 1), f.category, f.severity, pointer(f), f.comment]))
     : ["No findings."]));
-  const details = findings.filter((f) => f.detail);
-  if (details.length) lines.push("", "## Evidence", ...details.flatMap((f) => ["", `### ${findings.indexOf(f) + 1}. ${f.title} (${pointer(f)})`, "", f.detail!]));
+  const details = findings.filter((f) => f.detail || f.verification?.length);
+  if (details.length) lines.push("", "## Evidence", ...details.flatMap((f) => ["", `### ${findings.indexOf(f) + 1}. ${f.title} (${pointer(f)})`, "", [f.detail, ...(f.verification ?? []).map((v) => `Verification (${v.model}): ${v.verdict} — ${v.reason}`)].filter(Boolean).join("\n\n")]));
   if (review.since_last_review?.length) {
     lines.push("", "## Since last review", "", ...table(["Previous finding", "Status"],
       review.since_last_review.map((s) => [s.finding, s.note ? `${s.status}: ${s.note}` : s.status])));
@@ -62,25 +78,4 @@ export function renderMarkdown(review: Review, meta: Meta): string {
     if (review.coverage_gaps?.length) lines.push("", ...review.coverage_gaps.map((g) => `- ${g}`));
   }
   return lines.join("\n") + "\n";
-}
-
-export function specialistPrompt(pass: { specialist: string; scope: string; skill?: string }, run: { packet: string; head: string; instructions?: string }): string {
-  return [`Specialist pass: ${pass.specialist}`, `Packet: ${run.packet}`, `Head: ${run.head}`,
-    pass.skill ? `Repository review skill in your system prompt: ${pass.skill}; its references live next to it.` : "", "", "Scope:", pass.scope,
-    ...(run.instructions ? ["", "Instructions from the human who requested this review:", run.instructions] : [])].join("\n");
-}
-
-export type Usage = { turns: number; input: number; output: number; cacheRead: number; cacheWrite: number; cost: number; error?: string };
-
-export function summariseUsage(events: any[]): Usage {
-  const usage: Usage = { turns: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
-  for (const event of events) {
-    const message = event.type === "message_end" ? event.message : undefined;
-    if (message?.role !== "assistant") continue;
-    usage.turns++;
-    for (const key of ["input", "output", "cacheRead", "cacheWrite"] as const) usage[key] += message.usage?.[key] ?? 0;
-    usage.cost += message.usage?.cost?.total ?? 0;
-    if (message.stopReason === "error") usage.error = message.errorMessage ?? "unknown error";
-  }
-  return usage;
 }
