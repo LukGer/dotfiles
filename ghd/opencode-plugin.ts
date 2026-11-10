@@ -17,7 +17,9 @@ const dropped = { type: "array", items: object({ candidate: string, reason: stri
 type ToolContext = { sessionID: string; agent: string; signal: AbortSignal };
 type Tool = { name: string; description: string; input: unknown; options: { codemode: boolean }; execute: (input: any, context: ToolContext) => Promise<{ content: string }> };
 type Registration = { dispose: () => Promise<void> };
-type Context = { tool: {
+type Context = { websearch: {
+  transform: (callback: (editor: { default: { get: () => string | false | undefined; set: (selection: string | false) => void } }) => void) => Promise<Registration>;
+}; tool: {
   transform: (callback: (editor: { add: (tool: Tool) => void }) => void) => Promise<Registration>;
   hook: (name: "execute.before", callback: (event: { tool: string; input: any }) => Promise<void>) => Promise<Registration>;
 } };
@@ -51,6 +53,9 @@ export default {
     };
     const spendVerification = verificationBudget(meta.verification_model ?? "openai/gpt-6-luna", meta.model);
     const registrations = [];
+    registrations.push(await ctx.websearch.transform((editor) => {
+      if (editor.default.get() === undefined) editor.default.set("random");
+    }));
     registrations.push(await ctx.tool.hook("execute.before", async (event) => {
       if (["edit", "write", "patch", "opencode_worktree_create", "opencode_worktree_remove", "opencode_session_move"].includes(event.tool)) throw new Error("Review is read-only; save findings through save_finding.");
       if (event.tool === "shell") {

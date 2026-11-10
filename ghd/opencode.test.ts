@@ -1,8 +1,56 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, existsSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, existsSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+for (const configured of [undefined, false, "tavily", "random"]) {
+  test(`review web search needs no provider form (configured: ${configured})`, async (t) => {
+    const directory = mkdtempSync(join(tmpdir(), "ghd-websearch-test-"));
+    const out = join(directory, "review");
+    const previous = process.env.GHD_REVIEW;
+    process.env.GHD_REVIEW = out;
+    t.after(() => {
+      rmSync(directory, { recursive: true, force: true });
+      if (previous === undefined) delete process.env.GHD_REVIEW;
+      else process.env.GHD_REVIEW = previous;
+    });
+    writeFileSync(`${out}.json`, JSON.stringify({ session: "ses_test", cwd: directory }));
+    const plugin = (await import("./opencode-plugin.ts")).default;
+    let selection = configured;
+    let disposed = false;
+    const registration = { dispose: async () => {} };
+    const cleanup = await plugin.setup({
+      websearch: {
+        transform: async (transform: any) => {
+          transform({ default: { get: () => selection, set: (value: any) => selection = value } });
+          return { dispose: async () => { disposed = true; } };
+        },
+      },
+      tool: { hook: async () => registration, transform: async () => registration },
+    });
+    assert.equal(selection, configured ?? "random", "Web Search would ask for a provider in a headless review");
+    await cleanup();
+    assert.equal(disposed, true);
+  });
+}
+
+test("non-review sessions leave web search untouched", async () => {
+  const previous = process.env.GHD_REVIEW;
+  delete process.env.GHD_REVIEW;
+  try {
+    const plugin = (await import("./opencode-plugin.ts")).default;
+    await plugin.setup({
+      websearch: { transform: async () => { assert.fail("not a review"); } },
+      tool: {
+        hook: async () => { assert.fail("not a review"); },
+        transform: async () => { assert.fail("not a review"); },
+      },
+    });
+  } finally {
+    if (previous !== undefined) process.env.GHD_REVIEW = previous;
+  }
+});
 
 test("review tools validate, deduplicate, and finish only in the orchestrator", async () => {
   const directory = mkdtempSync(join(tmpdir(), "ghd-opencode-test-"));
@@ -13,6 +61,7 @@ test("review tools validate, deduplicate, and finish only in the orchestrator", 
   const tools = new Map<string, any>();
   const hooks = new Map<string, any>();
   await plugin.setup({
+    websearch: { transform: async () => ({ dispose: async () => {} }) },
     tool: {
       transform: async (f: any) => { f({ add: (tool: any) => tools.set(tool.name, tool) }); return { dispose: async () => {} }; },
       hook: async (name: string, f: any) => { hooks.set(name, f); return { dispose: async () => {} }; },

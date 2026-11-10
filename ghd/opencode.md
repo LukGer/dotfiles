@@ -77,6 +77,14 @@ plugin side channel supplies progress while specialists run.
 [Plugin API](https://opencode.ai/v2/docs/build/plugins/server/),
 [tagged JSON renderer](https://github.com/anomalyco/opencode/blob/v2.2.5/packages/cli/src/run/noninteractive.ts)
 
+For headless reviews, the review plugin supplies `random` as the web search
+provider when configuration leaves it unset, avoiding the first-use “Web Search”
+form that `opencode run` cannot answer. An explicit `websearch` provider or
+`websearch: false` in configuration takes precedence. This default is scoped to
+the review process and does not save a global preference or affect PR chat.
+[Web search tool](https://github.com/anomalyco/opencode/blob/v2.2.6/packages/core/src/tool/plugin/websearch.ts),
+[web search plugin API](https://github.com/anomalyco/opencode/blob/v2.2.6/packages/plugin/src/promise/websearch.ts).
+
 Atlassian uses `mcp.servers.atlassian`, a remote server at
 `https://mcp.atlassian.com/v1/mcp/authv2`. The installer preserves existing MCP
 configuration and adds the server only when missing. Review permissions allow
