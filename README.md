@@ -112,11 +112,12 @@ npx -y skills@latest update -g
 ```
 
 Updates do not install newly published skills. To discover and install every
-skill from the followed Matt Pocock and Emil Kowalski repositories, run:
+skill from the followed Matt Pocock, Emil Kowalski, and Raphael Salaja repositories, run:
 
 ```sh
 npx -y skills@latest add mattpocock/skills -g -s '*' -a universal -y
 npx -y skills@latest add emilkowalski/skills -g -s '*' -a universal -y
+npx -y skills@latest add raphaelsalaja/skills -g -s '*' -a universal -y
 ```
 
 ## Notes

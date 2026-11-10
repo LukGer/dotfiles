@@ -130,13 +130,13 @@
       "updatedAt": "2026-10-20T15:40:50.299Z"
     },
     "prototype": {
-      "source": "emilkowalski/skills",
+      "source": "raphaelsalaja/skills",
       "sourceType": "github",
-      "sourceUrl": "https://github.com/emilkowalski/skills.git",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
       "skillPath": "skills/prototype/SKILL.md",
-      "skillFolderHash": "34cd3a303aef0a975fcce3ac906d6b293e600399",
+      "skillFolderHash": "c908440a8aa977a05620e82412bb5d09f7ba252c",
       "installedAt": "2026-07-15T07:03:16.755Z",
-      "updatedAt": "2026-11-09T14:39:41.259Z"
+      "updatedAt": "2026-11-10T08:17:27.309Z"
     },
     "research": {
       "source": "mattpocock/skills",
@@ -736,6 +736,231 @@
       "skillFolderHash": "bdefda3891d347b8a183bdc727e4a1de2be3c82b",
       "installedAt": "2026-11-09T14:39:41.261Z",
       "updatedAt": "2026-11-09T14:39:41.261Z"
+    },
+    "alignment": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/alignment/SKILL.md",
+      "skillFolderHash": "b8c654663fad3a5d627bdfedc6a603aab9140724",
+      "installedAt": "2026-11-10T08:17:27.291Z",
+      "updatedAt": "2026-11-10T08:17:27.291Z"
+    },
+    "audit": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/audit/SKILL.md",
+      "skillFolderHash": "412ba398a09e3226a5f768030117dd6a81050b3e",
+      "installedAt": "2026-11-10T08:17:27.293Z",
+      "updatedAt": "2026-11-10T08:17:27.293Z"
+    },
+    "avatar": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/avatar/SKILL.md",
+      "skillFolderHash": "ac66baf21e203891dfc1f3615614816f3fc01b8f",
+      "installedAt": "2026-11-10T08:17:27.294Z",
+      "updatedAt": "2026-11-10T08:17:27.294Z"
+    },
+    "bots": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/bots/SKILL.md",
+      "skillFolderHash": "118244f55ac900815b881e098544dc4f214ef266",
+      "installedAt": "2026-11-10T08:17:27.294Z",
+      "updatedAt": "2026-11-10T08:17:27.294Z"
+    },
+    "color": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/color/SKILL.md",
+      "skillFolderHash": "e39936b199481bf913f5eb0f13e51f1a2a83b6d3",
+      "installedAt": "2026-11-10T08:17:27.299Z",
+      "updatedAt": "2026-11-10T08:17:27.299Z"
+    },
+    "copy": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/copy/SKILL.md",
+      "skillFolderHash": "572f6ba8269d0245c06305cb208a763f30b4f37f",
+      "installedAt": "2026-11-10T08:17:27.299Z",
+      "updatedAt": "2026-11-10T08:17:27.299Z"
+    },
+    "deconstruct": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/deconstruct/SKILL.md",
+      "skillFolderHash": "310d36c22c99cf75cb3dc9ab50b61dbeaa78d3bb",
+      "installedAt": "2026-11-10T08:17:27.299Z",
+      "updatedAt": "2026-11-10T08:17:27.299Z"
+    },
+    "defaults": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/defaults/SKILL.md",
+      "skillFolderHash": "e3147173e977dbc9724563cab85e2b51741ce020",
+      "installedAt": "2026-11-10T08:17:27.300Z",
+      "updatedAt": "2026-11-10T08:17:27.300Z"
+    },
+    "frames": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/frames/SKILL.md",
+      "skillFolderHash": "97cda7942dfc24951a8174eba4f7390615011070",
+      "installedAt": "2026-11-10T08:17:27.300Z",
+      "updatedAt": "2026-11-10T08:17:27.300Z"
+    },
+    "gather": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/gather/SKILL.md",
+      "skillFolderHash": "e3552dc9624cc0a6485b6afbbdc9c874d94e59e0",
+      "installedAt": "2026-11-10T08:17:27.300Z",
+      "updatedAt": "2026-11-10T08:17:27.300Z"
+    },
+    "icons": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/icons/SKILL.md",
+      "skillFolderHash": "f41a377ae0a59456831a228ddff1e6e08db35f2e",
+      "installedAt": "2026-11-10T08:17:27.307Z",
+      "updatedAt": "2026-11-10T08:17:27.307Z"
+    },
+    "invariants": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/invariants/SKILL.md",
+      "skillFolderHash": "d1ac9954196ee3cff458b41bff3c6540c8cbcaed",
+      "installedAt": "2026-11-10T08:17:27.307Z",
+      "updatedAt": "2026-11-10T08:17:27.307Z"
+    },
+    "keyboard": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/keyboard/SKILL.md",
+      "skillFolderHash": "5c144cc27e3ff3fdb9c81c03a562ad99cc85f2c3",
+      "installedAt": "2026-11-10T08:17:27.307Z",
+      "updatedAt": "2026-11-10T08:17:27.307Z"
+    },
+    "lab": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/lab/SKILL.md",
+      "skillFolderHash": "ee0e01c478e17845cde9b207f35af6715b40400d",
+      "installedAt": "2026-11-10T08:17:27.308Z",
+      "updatedAt": "2026-11-10T08:17:27.308Z"
+    },
+    "match": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/match/SKILL.md",
+      "skillFolderHash": "9c81977e95bf7a2995dea8eed9053ed1c2ffa8d0",
+      "installedAt": "2026-11-10T08:17:27.308Z",
+      "updatedAt": "2026-11-10T08:17:27.308Z"
+    },
+    "motion": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/motion/SKILL.md",
+      "skillFolderHash": "9fefa7c4a931f4fbb3fa0759229571bde9dc0908",
+      "installedAt": "2026-11-10T08:17:27.308Z",
+      "updatedAt": "2026-11-10T08:17:27.308Z"
+    },
+    "prose": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/prose/SKILL.md",
+      "skillFolderHash": "7868276da6ee4e2d86fb954943d821a8baf1e6ca",
+      "installedAt": "2026-11-10T08:17:27.309Z",
+      "updatedAt": "2026-11-10T08:17:27.309Z"
+    },
+    "restraint": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/restraint/SKILL.md",
+      "skillFolderHash": "2a784c49491a42cb9ababc686a83b6049a4d15e4",
+      "installedAt": "2026-11-10T08:17:27.309Z",
+      "updatedAt": "2026-11-10T08:17:27.309Z"
+    },
+    "reuse": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/reuse/SKILL.md",
+      "skillFolderHash": "e64b1f6c6135bf0cce1a828db9e12a0f173ce574",
+      "installedAt": "2026-11-10T08:17:27.309Z",
+      "updatedAt": "2026-11-10T08:17:27.309Z"
+    },
+    "rule": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/rule/SKILL.md",
+      "skillFolderHash": "d0affad02f0ca5ccc5a4775864c6b1803e759743",
+      "installedAt": "2026-11-10T08:17:27.309Z",
+      "updatedAt": "2026-11-10T08:17:27.309Z"
+    },
+    "scope": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/scope/SKILL.md",
+      "skillFolderHash": "5e97144bb78afded55d004ceea95aed07b48f24d",
+      "installedAt": "2026-11-10T08:17:27.310Z",
+      "updatedAt": "2026-11-10T08:17:27.310Z"
+    },
+    "ship": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/ship/SKILL.md",
+      "skillFolderHash": "0b4c97a7c658bb061a1a158550452c48c9867a83",
+      "installedAt": "2026-11-10T08:17:27.310Z",
+      "updatedAt": "2026-11-10T08:17:27.310Z"
+    },
+    "sketchbook": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/sketchbook/SKILL.md",
+      "skillFolderHash": "4da72cf558a1813b46e9c571d214eb9a9f0c7577",
+      "installedAt": "2026-11-10T08:17:27.310Z",
+      "updatedAt": "2026-11-10T08:17:27.310Z"
+    },
+    "verify": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/verify/SKILL.md",
+      "skillFolderHash": "a58b18b19ed71ddafe0acad956a5eccfd4c523e4",
+      "installedAt": "2026-11-10T08:17:27.310Z",
+      "updatedAt": "2026-11-10T08:17:27.310Z"
+    },
+    "viewports": {
+      "source": "raphaelsalaja/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/raphaelsalaja/skills.git",
+      "skillPath": "skills/viewports/SKILL.md",
+      "skillFolderHash": "cc72ed1d21a0cddfc92f7aa5d96b1cdd04ee1a82",
+      "installedAt": "2026-11-10T08:17:27.310Z",
+      "updatedAt": "2026-11-10T08:17:27.310Z"
     }
   },
   "dismissed": {
