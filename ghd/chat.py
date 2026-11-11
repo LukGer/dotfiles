@@ -44,12 +44,16 @@ def main():
             f"## Description\n\n{view['body'] or '(empty)'}\n\n"
             f"## Diff\n\n```diff\n{diff.rstrip()}\n```\n"
         )
+        (directory / "opencode.json").write_text(json.dumps({
+            "default_agent": "ghd-chat",
+            "model": model,
+            "instructions": [context.name],
+        }))
         command = [
-            "opencode", "mini", "--standalone", "--model", model, "--agent", "ghd-chat",
+            "opencode", "--standalone",
             "--prompt", "Give me a brief overview of this PR, then help me understand it as I ask questions.",
         ]
-        with context.open() as snapshot:
-            return subprocess.call(command, cwd=directory, stdin=snapshot)
+        return subprocess.call(command, cwd=directory)
 
 
 if __name__ == "__main__":

@@ -20,17 +20,20 @@ def test_pr_chat_supplies_snapshot_without_putting_large_diffs_in_arguments(monk
         return subprocess.CompletedProcess(command, 0, stdout=json.dumps(view) if command[2] == "view" else diff)
 
     calls = []
-    def call(command, *, cwd, stdin):
-        calls.append((command, stdin.read(), cwd))
+    def call(command, *, cwd, **kwargs):
+        calls.append(command)
+        assert command[:2] == ["opencode", "--standalone"]
+        assert "stdin" not in kwargs
+        config = json.loads((cwd / "opencode.json").read_text())
+        assert config["default_agent"] == "ghd-chat"
+        assert config["model"] == model
+        snapshot = (cwd / config["instructions"][0]).read_text()
+        assert diff in snapshot and "PR requirements" in snapshot and "Head when loaded: abc" in snapshot
         return 0
 
     monkeypatch.setattr(chat.subprocess, "run", run)
     monkeypatch.setattr(chat.subprocess, "call", call)
     monkeypatch.setattr(sys, "argv", ["ghd chat", "o/r", "1", "--model", model])
     assert chat.main() == 0
-    command, snapshot, cwd = calls[0]
-    assert command[:3] == ["opencode", "mini", "--standalone"]
-    assert command[command.index("--agent") + 1] == "ghd-chat"
-    assert command[command.index("--model") + 1] == model
-    assert diff in snapshot and "PR requirements" in snapshot and "Head when loaded: abc" in snapshot
-    assert sum(map(len, command)) < 1000
+    assert len(calls) == 1
+    assert sum(map(len, calls[0])) < 1000

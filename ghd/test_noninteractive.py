@@ -94,7 +94,7 @@ def live_review(tmp_path):
                 if select.select([master], [], [], .02)[0]:
                     os.read(master, 65536)
 
-        wait_for(socket_file.exists)
+        wait_for(lambda: socket_file.exists() and socket_file.read_text())
         socket = socket_file.read_text()
         assert socket != "/outer-dashboard", "live output has no independent scrollback"
 

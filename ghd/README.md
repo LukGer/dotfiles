@@ -92,8 +92,9 @@ change the release and toolchain in `dash` and rebase `gh-dash.patch`.
 ## Chat with a PR
 
 Press `c`, or choose **Chat with PR** from `f`, then choose GPT-6.1 Sol or
-Opus (Claude Code). OpenCode opens an interactive conversation with the PR description and full
-diff attached. It starts with a brief overview; ask follow-up questions directly,
+Opus (Claude Code). OpenCode opens its full-screen conversation with the PR description and full
+diff loaded as context. Use the mouse wheel or Page Up/Page Down to read older
+messages inside the popup. It starts with a brief overview; ask follow-up questions directly,
 such as “Why did this change?” or “Walk me through the new error handling.”
 
 ```sh
@@ -110,8 +111,8 @@ The conversation uses a snapshot of the description and diff from launch.
 It has no tools or access to surrounding repository files; paste extra context
 when a question needs it. Large PRs must fit the selected model's context window.
 Chat doesn't post anything to GitHub or save a review. OpenCode stores the
-conversation; each launch creates a new session with a fresh snapshot. Ctrl+D
-exits the minimal interface when the input is empty.
+conversation; each launch creates a new session with a fresh snapshot. The snapshot
+is temporary context for that launch. Ctrl+X then Q exits the interface.
 
 ## Reviews
 
