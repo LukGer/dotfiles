@@ -61,6 +61,10 @@ V2 uses ordered `permissions` rules with `action`, `resource` and `effect`.
 Specialists have their own rules, so each review agent explicitly allows all
 tools; the review instructions and plugin enforce the review contract. The native `subagent` tool
 inherits the review model when neither its call nor agent specifies a model.
+Quality, design and completeness passes set the brief's `middle_model`
+(`gpt-6.1-terra#high` or `claude-agent/sonnet#high` by default, overridden with
+`GHD_MIDDLE_MODEL`); the plugin rejects any other specialist model, and every
+specialist pass when the packet's mode is `single`.
 Verification calls explicitly select the brief's `verification_model` (Luna or
 Haiku by default, overridden with `GHD_VERIFY_MODEL`). The review plugin permits
 one fresh foreground verification batch and one escalation on the review model;

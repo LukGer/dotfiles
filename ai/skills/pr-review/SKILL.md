@@ -19,7 +19,7 @@ The brief from `ghd review` names the PR, `base`, `merge_base`, `head`, `review_
 
 ## Step 1 — Gather
 
-When the brief names `packet`, read that file first: `ghd review` gathered the window, PR text, commits, files, Jira keys, existing review threads and the full diff into it, so only gather what it lacks. Otherwise gather once for the pinned window: exact changed paths and line counts, `gh pr view <pr> --repo <repo> --json title,body,headRefName`, `git log <merge_base>..<head>`, and the review threads already on the PR (`gh api --method GET repos/<repo>/pulls/<pr>/comments --paginate`). A point that already has a thread is not raised again; it goes in the Dropped table as `already on the PR`. Everything is committed; there is no staged, unstaged, or untracked review window.
+When the brief names `packet`, read that file first: `ghd review` gathered the window, PR text, commits, files, Jira keys, existing review threads and the reviewable diff into it, so only gather what it lacks. Lockfiles, generated files and diffs over 100 KB are listed under "Excluded from the diff" instead: generated files are reviewed through their sources (schemas, generator configuration), so read an excluded file only when a finding depends on it. Otherwise gather once for the pinned window: exact changed paths and line counts, `gh pr view <pr> --repo <repo> --json title,body,headRefName`, `git log <merge_base>..<head>`, and the review threads already on the PR (`gh api --method GET repos/<repo>/pulls/<pr>/comments --paginate`). A point that already has a thread is not raised again; it goes in the Dropped table as `already on the PR`. Everything is committed; there is no staged, unstaged, or untracked review window.
 
 When `.agents/skills/local-review/SKILL.md` exists, read its roster, exclusions, and Deep trigger, following its pointers for launch criteria. Apply those exclusions before reading the full reviewable diff. Otherwise read the full PR diff. Repository guidelines define what to inspect; this personal skill owns gathering, dispatch, verification, and output instead of running the repository's orchestration steps.
 
@@ -33,12 +33,15 @@ Gathering is complete when the packet identifies the reviewable files, available
 
 ## Step 2 — Review
 
+The brief's `mode` decides dispatch, ahead of any repository launch conditions. `single` (at most 200 reviewable changed lines, or that many since the previous review) is one pass in this session, as in Generic mode, applying the repository's exclusions. `specialists` uses Specialist mode. A brief without `mode` uses the rules below.
+
 ### Specialist mode
 
 When the repository has `local-review`, select specialists using its roster and launch conditions, including its risk zones and Deep trigger. Launch all in-scope passes in parallel. Each specialist loads its own repository `SKILL.md` and the references it requires; the parent uses those guidelines through their reports rather than loading every specialist's references itself.
 
-Give each specialist the relevant slice of the shared packet, including exact assigned paths and hunks, ticket content, access/index availability, and these execution rules:
+Give each specialist the relevant slice of the shared packet: exact assigned paths (line ranges for the deep pass) rather than pasted hunks, the packet's context section, ticket content, access/index availability, and these execution rules:
 
+- Read the packet's context section and only the assigned paths' diff, never the whole packet diff.
 - Use the supplied pinned window and gathered material; expand into callers, tests, and configuration as needed to verify changed behavior. Re-gather only a specifically missing input.
 - Apply the repository specialist's review guidelines and required checklists. This skill replaces its gathering and report destination, not its standards.
 - Keep code and external systems read-only. Return evidence in chat; only the parent writes the two final files.
@@ -50,6 +53,8 @@ Set scopes by responsibility:
 - **Deep correctness:** an independent second pass on the exact zone hunks that triggered it; for a size-only trigger, use the largest changed hunks. Trace their dependencies without broadening into a duplicate whole-PR review. Keep this pass independent of the first correctness pass's findings.
 - **Production risk:** changed behavior in every applicable risk zone, traced to reachable operational entry points and affected customers/configuration.
 - **Product design and completeness:** relevant user-facing changes and supplied ticket requirements respectively; retain the repository's launch conditions.
+
+Correctness, deep correctness, security and production risk run on the review model; quality, product design and completeness run on the brief's `middle_model`.
 
 When parallel dispatch is unavailable, run the same scoped passes sequentially using the shared packet. While specialists run, the parent resolves concrete missing inputs rather than starting duplicate review passes. An access gap stays a reported limitation unless new access or evidence becomes available.
 
@@ -63,7 +68,7 @@ Consolidate overlapping candidates and remove points already on the PR before ve
 
 Retain the verifier's model, verdict and reason in each finding's optional `verification` array. Keep refuted and uncertain candidates inspectable with the evidence; they start unticked. A missing or failed verification becomes `uncertain` with the access/error reason, never a clean bill of health. Use targeted parent reads to resolve concrete questions, rather than repeating the whole review. A clean PR needs no verifier call.
 
-**Re-review.** When the brief names `previous_findings`, read it and `git diff <previous_sha> <head>`. Sort each previous finding into *fixed* (the change addresses it), *open* (unchanged, still a finding), or *dropped* (no longer applies, or a thread on the PR settled it). Open findings not yet on the PR stay in `findings_file`; fixed and dropped ones appear only in the markdown. New findings in code the author did not touch since `previous_sha` are still findings, but say so.
+**Re-review.** When the brief names `previous_findings`, read it. When the packet has a `previous:` line, its "Since previous review" section lists the reviewable files changed since `previous_sha` and the diff command for them: discovery covers only that diff, and `mode` follows its size. The command usually starts from the previous review's changes replayed onto the current merge base, so a rebase onto a moved base or lower stack layer adds nothing. Without it (no checkout, or `previous_sha` is gone), review the full window. Sort each previous finding into *fixed* (the change addresses it), *open* (unchanged, still a finding), or *dropped* (no longer applies, or a thread on the PR settled it). Open findings not yet on the PR stay in `findings_file`; fixed and dropped ones appear only in the markdown. New findings in code the author did not touch since `previous_sha` are still findings, but say so.
 
 Keep discovered P3s from every specialist without extra nitpick-hunting passes. Completeness rows are ordinary findings in category `completeness`, rather than the repository orchestrator's advisory section. Consolidation is complete when each retained finding has verified evidence, a head anchor, and a final category/severity, with coverage gaps recorded.
 

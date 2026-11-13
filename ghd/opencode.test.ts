@@ -56,7 +56,7 @@ test("review tools validate, deduplicate, and finish only in the orchestrator", 
   const directory = mkdtempSync(join(tmpdir(), "ghd-opencode-test-"));
   const out = join(directory, "review");
   process.env.GHD_REVIEW = out;
-  writeFileSync(`${out}.json`, JSON.stringify({ repo: "o/r", pr: 7, sha: "abc", session: "ses_ghdtest", cwd: directory, title: "Example", tool: "opencode", model: "openai/gpt-6.1-sol#high", verification_model: "openai/gpt-6-luna" }));
+  writeFileSync(`${out}.json`, JSON.stringify({ repo: "o/r", pr: 7, sha: "abc", session: "ses_ghdtest", cwd: directory, title: "Example", tool: "opencode", model: "openai/gpt-6.1-sol#high", verification_model: "openai/gpt-6-luna", middle_model: "openai/gpt-6.1-terra#high", mode: "specialists" }));
   const plugin = (await import("./opencode-plugin.ts")).default;
   const tools = new Map<string, any>();
   const hooks = new Map<string, any>();
@@ -74,6 +74,8 @@ test("review tools validate, deduplicate, and finish only in the orchestrator", 
   await assert.rejects(save({ ...finding, category: "invalid" }), /category/);
   assert.equal(existsSync(`${out}.findings`), false);
   const verify = (input: any) => hooks.get("execute.before")({ tool: "subagent", input });
+  await verify({ agent: "ghd-reviewer", model: "openai/gpt-6.1-terra#high" });
+  await assert.rejects(verify({ agent: "ghd-reviewer", model: "openai/gpt-6-luna" }), /middle model/);
   await assert.rejects(verify({ agent: "ghd-verifier", model: "openai/gpt-6.1-sol#high" }), /cheap|verification model/);
   for (const extra of [{ sessionID: "old" }, { background: true }]) {
     await assert.rejects(verify({ agent: "ghd-verifier", model: "openai/gpt-6-luna", ...extra }), /fresh foreground/);

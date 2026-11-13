@@ -126,22 +126,56 @@ advertised alias; it is not pinned to a guessed model identifier. Reviews run
 only through OpenCode. Human instructions end the brief,
 reach every specialist verbatim, and appear in the saved metadata and review.
 
-1. Fetches the PR into your clone at `~/dev/<repo>` (`GHD_CODE_DIR` overrides
+1. When a saved review of this PR already covers its head commit, asks first:
+   enter opens that review, `r` reviews again, `q` quits.
+2. Fetches the PR into your clone at `~/dev/<repo>` (`GHD_CODE_DIR` overrides
    `~/dev`) and checks its head out into a detached worktree under
    `~/.cache/ghd/`, with git hooks off. No clone means a diff-only review.
-2. Gathers the **review packet** once with `ghd packet` (`packet.py`): the
+3. Gathers the **review packet** once with `ghd packet` (`packet.py`): the
    window, PR text, commits, files, Jira keys, existing review threads and
-   the full diff, saved as `<review>.packet.md`. Every reviewer reads it
-   instead of re-gathering, and it flags changes to `AGENTS.md`, `CLAUDE.md`,
-   `.agents/`, `.claude/` or `.codex/` so the human knows the review
-   instructions moved.
-3. Starts OpenCode's `pr-review` agent in a private server (`--standalone`),
+   the reviewable diff, saved as `<review>.packet.md`. Lockfiles, generated
+   files (`gen/`, `generated/`, `__generated__/`, `*.gen.*`, snapshots,
+   minified bundles, source maps and anything marked `linguist-generated` in
+   `.gitattributes`) and single-file diffs over 100 KB are listed with their
+   line counts instead of diffed: generated code is reviewed through its
+   sources, such as the OpenAPI schemas. The packet flags changes to
+   `AGENTS.md`, `CLAUDE.md`, `.agents/`, `.claude/` or `.codex/` so the human
+   knows the review instructions moved.
+
+   The packet also sets the review **mode**. Up to 200 reviewable changed
+   lines is `single`: the orchestrator reviews the diff itself with no
+   specialist passes, and the plugin enforces it. Larger changes use
+   `specialists`. On a re-review the clone already holds the previous
+   review's commit (fetched by SHA when it does not), so the packet lists the
+   reviewable files changed since then, discovery covers only that delta,
+   and the mode follows its size. The delta is stack-aware: the previous
+   review's changes (its merge base to its head) are replayed onto the
+   current merge base with `git merge-tree`, then compared with the new head,
+   so a rebase onto a moved base branch or lower stack layer adds nothing.
+   Files that conflict in the replay count as changed. Reviews saved before
+   their merge base was recorded fall back to diffing the two heads. Previous findings are still classified as
+   fixed, open or dropped. Without a clone, or when the previous commit is
+   gone, the full window is reviewed.
+4. Starts OpenCode's `pr-review` agent in a private server (`--standalone`),
    which receives this review's environment and the exact `pr-review` skill
-   path. Native `subagent` calls run scoped passes through `ghd-reviewer`,
-   inheriting the selected model. Repository `local-review` rosters, exclusions
-   and Deep triggers take precedence; otherwise `ghd/specialists/` provides
-   generic correctness, security, risk, quality, design, completeness and deep
+   path. Native `subagent` calls run scoped passes through `ghd-reviewer`.
+   Each pass reads the packet's context section and only its assigned
+   paths' diff, never the whole packet diff. Repository `local-review`
+   rosters, exclusions and Deep triggers take precedence within
+   `specialists` mode; otherwise `ghd/specialists/` provides generic
+   correctness, security, risk, quality, design, completeness and deep
    checklists. Code Mode combines independent reads and Jira lookups.
+
+   Models come in three tiers per provider:
+
+   | Tier | OpenAI | Claude | Used for |
+   | --- | --- | --- | --- |
+   | strong (selected) | `gpt-6.1-sol#high` | `opus#high` | orchestrator, single pass, correctness, deep, security, risk, escalation |
+   | middle | `gpt-6.1-terra#high` | `sonnet#high` | quality, design, completeness |
+   | weak | `gpt-6-luna` | `haiku` | verification |
+
+   `GHD_MIDDLE_MODEL` and `GHD_VERIFY_MODEL` override the middle and weak
+   tiers. Specialists may only use the strong or middle model.
    `ghd/opencode-plugin.ts` adds `save_finding` and `finish_review`: candidates
    are validated and deduplicated before saving, and only the parent session
    can write the final artifacts. Agent permissions deny edits, unlisted shell
@@ -149,9 +183,8 @@ reach every specialist verbatim, and appear in the saved metadata and review.
    file, git, GitHub and install writes for every session.
    Jira comes from the Atlassian MCP server. `install.sh` registers it if
    missing; authorise it once with `opencode mcp auth atlassian`. Missing access
-   is recorded as a coverage gap. Re-reviews receive the previous findings and
-   commit, classify each finding as fixed, open or dropped, and skip points
-   already discussed on GitHub.
+   is recorded as a coverage gap. Points already discussed on GitHub are
+   skipped.
 
    After discovery, the parent deduplicates candidates and sends one compact
    batch to a fresh cheaper verifier: Luna for OpenAI reviews, Haiku for Claude
@@ -173,7 +206,7 @@ reach every specialist verbatim, and appear in the saved metadata and review.
    unticked, and contradictory votes remain unticked even after escalation.
    Older reviews without verification retain their previous selection behavior.
 
-4. The findings file at `~/.local/share/gh-dash-reviews/` (`GHD_STORE`
+5. The findings file at `~/.local/share/gh-dash-reviews/` (`GHD_STORE`
    overrides) holds the TLDR and findings, each with a category (`bug`,
    `security`, `risk`, `quality`, `design`, `completeness`) and a severity
    (`P0`–`P3`, where `P3` is a nitpick), plus the dropped candidates and
@@ -181,7 +214,7 @@ reach every specialist verbatim, and appear in the saved metadata and review.
    each anchor against the file at `head`; `ghd review` runs it again after
    the agent and keeps an invalid file aside as `.findings.invalid`. A failed
    run leaves no metadata behind.
-5. On a terminal the review runs inside the **review screen** (`ghd tui`, a
+6. On a terminal the review runs inside the **review screen** (`ghd tui`, a
    Bubble Tea program in `ghd/reviewtui/`, built once per source change and
    cached under `~/.cache/ghd/`). While the agent runs it shows elapsed time,
    cost, the phase, each specialist pass as it starts and finishes, findings
@@ -191,7 +224,7 @@ reach every specialist verbatim, and appear in the saved metadata and review.
    Off a terminal, `opencode.py` renders V2 JSON text and completed tool calls
    and preserves provider failures. The progress plugin reports live specialist
    activity while calls are running.
-6. The review screen then shows the findings: a list with checkboxes
+7. The review screen then shows the findings: a list with checkboxes
    (P0–P2 start ticked, nitpicks and completeness unticked) and, for the
    selected finding, the exact comment that will be posted, the diff hunk at
    head around its anchor, and the reviewer's evidence. Up/Down chooses a

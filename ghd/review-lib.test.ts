@@ -1,6 +1,25 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { blockedCommand, duplicateOf, renderMarkdown } from "./review-lib.ts";
+import { blockedCommand, duplicateOf, renderMarkdown, specialistError } from "./review-lib.ts";
+
+describe("specialistError", () => {
+  const strong = "openai/gpt-6.1-sol#high", middle = "openai/gpt-6.1-terra#high";
+  for (const [mode, model, error] of [
+    ["specialists", undefined, null],
+    ["specialists", strong, null],
+    ["specialists", middle, null],
+    ["specialists", "openai/gpt-6-luna", /review model|middle model/],
+    [undefined, undefined, null],
+    ["single", undefined, /one pass|this session/],
+    ["single", middle, /one pass|this session/],
+  ] as const) {
+    test(`${mode} mode, ${model ?? "inherited"} model`, () => {
+      const result = specialistError(mode, model, strong, middle);
+      if (error) assert.match(result ?? "", error);
+      else assert.equal(result, null);
+    });
+  }
+});
 
 describe("blockedCommand", () => {
   const allowed = [

@@ -61,6 +61,17 @@ printf '\n  \033[1;36m%s review\033[0m  %s#%s\n  %s  \033[2m(%s)\033[0m\n\n' "$t
 
 store=${GHD_STORE:-$HOME/.local/share/gh-dash-reviews}
 mkdir -p $store
+for saved in $store/*__${repo//\//_}__${pr}__*.json(N.On); do
+  [[ -s ${saved%.json}.md && $(jq -r .sha $saved) == $head ]] || continue
+  print "  Already reviewed at ${head[1,7]} with $(jq -r .model $saved) ($(jq -r .at $saved))."
+  print -n '  enter opens it · r reviews again · q quits '
+  read -k 1 -u 0 choice; print
+  case $choice in
+    r) break ;;
+    q) exit 0 ;;
+    *) exec $lib/view $repo $pr ${saved%.json}.md ;;
+  esac
+done
 out=$store/$(date +%Y%m%d-%H%M%S)__${repo//\//_}__${pr}__${tool}
 
 clone=${GHD_CODE_DIR:-$HOME/dev}/${repo#*/}
@@ -81,21 +92,33 @@ else
   cd $(mktemp -d -t ghd-review)
 fi
 
-if [[ -z $GHD_VERIFY_MODEL ]]; then
-  case $model in
-    claude-agent/*) GHD_VERIFY_MODEL=claude-agent/haiku ;;
-    *) GHD_VERIFY_MODEL=openai/gpt-6-luna ;;
-  esac
+case $model in
+  claude-agent/*) tiers=(claude-agent/sonnet#high claude-agent/haiku) ;;
+  *) tiers=(openai/gpt-6.1-terra#high openai/gpt-6-luna) ;;
+esac
+export GHD_MIDDLE_MODEL=${GHD_MIDDLE_MODEL:-$tiers[1]} GHD_VERIFY_MODEL=${GHD_VERIFY_MODEL:-$tiers[2]}
+
+previous=($store/*__${repo//\//_}__${pr}__*.findings(N.On))
+(( $#previous )) && prev=${previous[1]%.findings} prev_sha=$(jq -r .sha $prev.json)
+known() { git -C $clone cat-file -e "$1^{commit}" 2>/dev/null || { git -C $clone fetch -q origin $1 2>/dev/null && git -C $clone cat-file -e "$1^{commit}" 2>/dev/null } }
+delta=(none none)
+if [[ -n $merge_base && -n $prev_sha && $prev_sha != $head ]] && known $prev_sha; then
+  delta=($prev_sha none)
+  prev_base=$(jq -r '.merge_base // empty' $prev.json)
+  [[ -n $prev_base ]] && known $prev_base && delta[2]=$prev_base
 fi
-export GHD_VERIFY_MODEL
+
+print '  Gathering the review packet...'
+python3 $lib/packet.py $repo $pr ${merge_base:-none} $head $delta > $out.packet.md || fail "Could not gather the packet for $repo#$pr."
+mode=$(sed -n 's/^mode: //p' $out.packet.md)
+context_lines=$(awk '/^## Diff$/ { print NR - 1; exit }' $out.packet.md)
 
 session=$(uuidgen | tr A-Z a-z)
 session=ses_ghd${session//-/}
 jq -n --arg repo $repo --argjson pr $pr --arg tool $tool --arg model $model --arg sha $head --arg title $title \
-  --arg verification_model "$GHD_VERIFY_MODEL" --arg instructions "$instructions" --arg at "$(date '+%Y-%m-%d %H:%M')" --arg session $session --arg cwd $PWD --arg merge_base "$merge_base" \
-  '{repo: $repo, pr: $pr, tool: $tool, model: $model, sha: $sha, title: $title, instructions: $instructions, verification_model: $verification_model, at: $at, session: $session, cwd: $cwd, merge_base: $merge_base}' > $out.json
-print '  Gathering the review packet...'
-python3 $lib/packet.py $repo $pr ${merge_base:-none} $head > $out.packet.md || fail "Could not gather the packet for $repo#$pr."
+  --arg middle_model $GHD_MIDDLE_MODEL --arg verification_model $GHD_VERIFY_MODEL --arg mode $mode \
+  --arg instructions "$instructions" --arg at "$(date '+%Y-%m-%d %H:%M')" --arg session $session --arg cwd $PWD --arg merge_base "$merge_base" \
+  '{repo: $repo, pr: $pr, tool: $tool, model: $model, sha: $sha, title: $title, instructions: $instructions, middle_model: $middle_model, verification_model: $verification_model, mode: $mode, at: $at, session: $session, cwd: $cwd, merge_base: $merge_base}' > $out.json
 
 brief="$repo#$pr
 base: $baseRef
@@ -105,19 +128,18 @@ review_file: $out.md
 findings_file: $out.findings
 check: ghd check $out.findings${merge_base:+ --head $head}
 packet: $out.packet.md
+packet_context_lines: $context_lines
+mode: $mode
 review_skill: $lib/../ai/skills/pr-review/SKILL.md
+middle_model: $GHD_MIDDLE_MODEL
 verification_model: $GHD_VERIFY_MODEL
 verification_guidelines: $lib/verification.md
 specialist_checklists: $lib/specialists
 tool: $tool"
-previous=($store/*__${repo//\//_}__${pr}__*.findings(N.On))
-if (( $#previous )); then
-  prev=${previous[1]%.findings}
-  brief+="
+[[ -n $prev ]] && brief+="
 previous_review: $prev.md
 previous_findings: $prev.findings
-previous_sha: $(jq -r .sha $prev.json)"
-fi
+previous_sha: $prev_sha"
 brief+="
 For GitHub API reads, use gh api --method GET <endpoint>."
 [[ -n $instructions ]] && brief+="

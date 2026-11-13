@@ -20,6 +20,12 @@ export function verificationBudget(cheap: string, strong: string) {
   };
 }
 
+export function specialistError(mode: string | undefined, model: string | undefined, strong: string, middle?: string): string | null {
+  if (mode === "single") return "This change is small enough for one pass: review it in this session without specialists.";
+  if (model === undefined || model === strong || model === middle) return null;
+  return `Specialists use the review model ${strong} or the middle model ${middle ?? strong}.`;
+}
+
 export type Finding = {
   file: string; line: number; start_line?: number; anchor: string;
   category: string; severity: string; title: string; comment: string; detail?: string; specialist?: string; verification?: Verification[];
@@ -32,7 +38,7 @@ export type Review = {
   passes?: { specialist: string; status: string; note?: string }[];
   coverage_gaps?: string[];
 };
-export type Meta = { repo: string; pr: number | string; title: string; tool: string; model: string; sha: string; instructions?: string; verification_model?: string };
+export type Meta = { repo: string; pr: number | string; title: string; tool: string; model: string; sha: string; instructions?: string; verification_model?: string; middle_model?: string; mode?: string };
 
 const GIT_WRITES = /\bgit\s+(-[^\s]+\s+)*(add|am|apply|branch\s+(-[dDmM]|--delete)|checkout|cherry-pick|clean|commit|fetch|merge|mv|pull|push|rebase|reset|restore|revert|rm|stash|switch|tag\s+-d|worktree)\b/;
 const FILE_WRITES = /\brm\s|\bmv\s|\btee\b|(^|[^&<>0-9])>>?(?!\s*(&|\/dev\/null))/;

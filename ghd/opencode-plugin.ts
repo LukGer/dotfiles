@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { blockedCommand, CATEGORIES, duplicateOf, renderMarkdown, SEVERITIES, VERDICTS, verificationBudget, type Finding, type Review, type Meta } from "./review-lib.ts";
+import { blockedCommand, CATEGORIES, duplicateOf, renderMarkdown, SEVERITIES, specialistError, VERDICTS, verificationBudget, type Finding, type Review, type Meta } from "./review-lib.ts";
 
 const object = (properties: Record<string, unknown>, required = Object.keys(properties)) => ({ type: "object", properties, required, additionalProperties: false });
 const string = { type: "string" };
@@ -67,6 +67,10 @@ export default {
           if (event.input.sessionID || event.input.background) throw new Error("Verification uses one fresh foreground batch, without follow-ups.");
           spendVerification(event.input.model);
         } else if (event.input?.agent !== "ghd-reviewer") throw new Error("Review passes must use ghd-reviewer or ghd-verifier.");
+        else {
+          const error = specialistError(meta.mode, event.input.model, meta.model, meta.middle_model);
+          if (error) throw new Error(error);
+        }
       }
     }));
     registrations.push(await ctx.tool.transform((editor) => {

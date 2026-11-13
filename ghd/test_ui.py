@@ -316,18 +316,91 @@ def test_menu_opens_the_selected_picker_in_a_larger_popup(cli, action, script):
     assert shlex.split(popups[-1][-1])[-3:] == [str(ROOT / "ghd" / script), "owner/repo", "42"]
 
 
-@pytest.mark.parametrize("tool, model, override, expected", [
-    ("opencode", "openai/gpt-6.1-sol#high", "", "openai/gpt-6-luna"),
-    ("opencode", "claude-agent/opus#high", "", "claude-agent/haiku"),
-    ("opencode", "openai/gpt-6.1-sol#high", "claude-agent/haiku", "claude-agent/haiku"),
+@pytest.mark.parametrize("model, overrides, middle, weak", [
+    ("openai/gpt-6.1-sol#high", {}, "openai/gpt-6.1-terra#high", "openai/gpt-6-luna"),
+    ("claude-agent/opus#high", {}, "claude-agent/sonnet#high", "claude-agent/haiku"),
+    ("openai/gpt-6.1-sol#high", {"GHD_VERIFY_MODEL": "claude-agent/haiku", "GHD_MIDDLE_MODEL": "claude-agent/sonnet"},
+     "claude-agent/sonnet", "claude-agent/haiku"),
 ])
-def test_review_configures_a_separate_verification_model(cli, tmp_path, tool, model, override, expected):
-    result, calls = cli("review", "owner/repo", "42", tool, *([model] if model else []), GHD_VERIFY_MODEL=override)
+def test_review_configures_middle_and_verification_models(cli, tmp_path, model, overrides, middle, weak):
+    result, calls = cli("review", "owner/repo", "42", "opencode", model, **overrides)
     assert result.returncode == 0, result.stderr
-    brief = next(args for name, *args in calls if name == tool)[-1]
-    assert f"verification_model: {expected}" in brief
+    brief = next(args for name, *args in calls if name == "opencode")[-1]
+    assert f"middle_model: {middle}" in brief and f"verification_model: {weak}" in brief
     meta = json.loads(next((tmp_path / "reviews").glob("*.json")).read_text())
-    assert meta["verification_model"] == expected
+    assert (meta["middle_model"], meta["verification_model"]) == (middle, weak)
+
+
+def test_review_brief_and_metadata_name_the_packet_mode(cli, tmp_path):
+    result, calls = cli("review", "owner/repo", "42", "opencode")
+    assert result.returncode == 0, result.stderr
+    brief = next(args for name, *args in calls if name == "opencode")[-1]
+    packet = Path(next(line.removeprefix("packet: ") for line in brief.splitlines() if line.startswith("packet: ")))
+    context = int(next(line.removeprefix("packet_context_lines: ") for line in brief.splitlines()
+                       if line.startswith("packet_context_lines: ")))
+    assert packet.read_text().splitlines()[context] == "## Diff"
+    assert "mode: single" in brief
+    assert json.loads(next((tmp_path / "reviews").glob("*.json")).read_text())["mode"] == "single"
+
+
+@pytest.mark.parametrize("key, opens_saved, reviews", [("\n", True, False), ("o", True, False), ("r", False, True), ("q", False, False)])
+def test_review_of_an_already_reviewed_head_offers_the_saved_review(cli, tmp_path, key, opens_saved, reviews):
+    store = tmp_path / "reviews"
+    store.mkdir()
+    saved = store / "20200101-000000__owner_repo__42__opencode"
+    saved.with_suffix(".json").write_text(json.dumps({
+        "repo": "owner/repo", "pr": 42, "at": "earlier", "tool": "opencode", "model": "m", "sha": "1234567890"}))
+    saved.with_suffix(".md").write_text("# saved\n")
+    saved.with_suffix(".findings").write_text('{"tldr": "x", "findings": []}')
+    result, calls = cli("review", "owner/repo", "42", "opencode", input_text=key)
+    assert result.returncode == 0, result.stderr
+    assert any(name == "opencode" for name, *_ in calls) == reviews
+    viewed = [args[-1] for name, *args in calls if name == "glow"]
+    assert (viewed == [str(saved.with_suffix(".md"))]) == opens_saved
+
+
+def checked_out_pr(tmp_path, commits: int):
+    origin = tmp_path / "owner/repo"
+    origin.mkdir(parents=True)
+
+    def git(*args):
+        return subprocess.check_output(["git", "-C", str(origin), *args], text=True).strip()
+
+    def commit(content, message):
+        (origin / "a.txt").write_text(content)
+        git("add", "a.txt")
+        git("-c", "user.name=test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false",
+            "-c", "core.hooksPath=/dev/null", "commit", "-qm", message)
+        return git("rev-parse", "HEAD")
+
+    git("init", "-q", "-b", "main")
+    base = commit("base\n", "base")
+    git("checkout", "-qb", "feature")
+    shas = [commit("line\n" * (n + 1) * 150, f"commit {n}") for n in range(commits)]
+    git("checkout", "-q", "main")
+    git("update-ref", "refs/pull/42/head", shas[-1])
+    subprocess.run(["git", "clone", "-q", str(origin), str(tmp_path / "clones/repo")], check=True)
+    return [base, *shas]
+
+
+@pytest.mark.parametrize("previous_known, mode", [(True, "single"), (False, "specialists")])
+def test_rereview_reads_the_delta_from_the_existing_clone(cli, tmp_path, previous_known, mode):
+    base, _, first, head = checked_out_pr(tmp_path, 3)
+    store = tmp_path / "reviews"
+    store.mkdir()
+    previous = store / "20200101-000000__owner_repo__42__opencode"
+    previous.with_suffix(".json").write_text(json.dumps({
+        "repo": "owner/repo", "pr": 42, "at": "earlier", "tool": "opencode", "merge_base": base,
+        "sha": first if previous_known else "f" * 40}))
+    previous.with_suffix(".findings").write_text('{"tldr": "x", "findings": []}')
+    result, calls = cli("review", "owner/repo", "42", "opencode", input_text="\n",
+                        REAL_GIT=shutil.which("git"), PR_HEAD=head, HOME=str(tmp_path))
+    assert result.returncode == 0, result.stderr
+    brief = next(args for name, *args in calls if name == "opencode")[-1]
+    packet = Path(next(line.removeprefix("packet: ") for line in brief.splitlines() if line.startswith("packet: "))).read_text()
+    assert (f"previous: {first}" in packet) == previous_known
+    assert (f"changes ({base}..{first}) replayed onto the current merge base" in packet) == previous_known
+    assert f"mode: {mode}" in brief
 
 
 @pytest.mark.parametrize("tool", ["pi", "claude", "unknown"])
