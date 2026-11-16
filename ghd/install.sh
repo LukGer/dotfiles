@@ -24,6 +24,6 @@ link "$DOTFILES/ghd/progress-plugin.ts" "$HOME/.config/opencode/plugins/ghd-prog
 link "$DOTFILES/ghd/opencode-plugin.ts" "$HOME/.config/opencode/plugins/ghd-review.ts" "opencode plugin ghd-review"
 
 if command -v opencode >/dev/null && ! opencode mcp list 2>/dev/null | grep -q 'atlassian'; then
-  opencode mcp add atlassian --global --url https://mcp.atlassian.com/v1/mcp/authv2 >/dev/null \
+  opencode mcp add atlassian --global --url https://mcp.atlassian.com/v2/mcp >/dev/null \
     && echo "  registered OpenCode MCP server atlassian (run 'opencode mcp auth atlassian' once)"
 fi

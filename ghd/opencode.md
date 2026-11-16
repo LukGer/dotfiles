@@ -90,7 +90,7 @@ the review process and does not save a global preference or affect PR chat.
 [web search plugin API](https://github.com/anomalyco/opencode/blob/v2.2.6/packages/plugin/src/promise/websearch.ts).
 
 Atlassian uses `mcp.servers.atlassian`, a remote server at
-`https://mcp.atlassian.com/v1/mcp/authv2`. The installer preserves existing MCP
+`https://mcp.atlassian.com/v2/mcp`. The installer preserves existing MCP
 configuration and adds the server only when missing. Review permissions allow
 Jira reads; unavailable access becomes a coverage gap.
 [MCP configuration](https://opencode.ai/v2/docs/mcp-servers/)
