@@ -35,7 +35,7 @@ Anthropic endorsement of OpenCode. [Provider source](https://github.com/anomalyc
 [login source](https://github.com/anomalyco/opencode/blob/v2.2.5/packages/core/src/plugin/provider/claude-agent/integration.ts),
 [provider spec](https://github.com/anomalyco/opencode/blob/v2.2.5/specs/v2/claude-agent-provider.md)
 
-The picker uses `openai/gpt-6.1-sol#high` and `claude-agent/opus#high`. Claude's
+The picker uses `openai/gpt-6.2-sol#high` and `claude-agent/opus#high`. Claude's
 catalog comes from the installed Claude Code; `opus` selects its advertised
 Opus alias. Check `opencode models` before pinning a different identifier.
 [Model discovery source](https://github.com/anomalyco/opencode/blob/v2.2.5/packages/core/src/plugin/provider/claude-agent/provider.ts)

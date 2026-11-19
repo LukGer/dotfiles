@@ -36,13 +36,13 @@ func TestMenuChoices(t *testing.T) {
 		want *menuResult
 	}{
 		{"number picks a model, enter starts without instructions", []tea.KeyMsg{runes("1"), enter},
-			&menuResult{Action: "review", Model: "openai/gpt-6.1-sol#high"}},
+			&menuResult{Action: "review", Model: "openai/gpt-6.2-sol#high"}},
 		{"arrows and enter pick a model", []tea.KeyMsg{down, enter, enter},
 			&menuResult{Action: "review", Model: "claude-agent/opus#high"}},
 		{"typed instructions travel with the model, q included", []tea.KeyMsg{runes("2"), runes("quality only"), newline, runes("skip gen/"), enter},
 			&menuResult{Action: "review", Model: "claude-agent/opus#high", Instructions: "quality only\nskip gen/"}},
 		{"surrounding blank space is dropped", []tea.KeyMsg{runes("1"), runes("  "), newline, runes("a.go only "), enter},
-			&menuResult{Action: "review", Model: "openai/gpt-6.1-sol#high", Instructions: "a.go only"}},
+			&menuResult{Action: "review", Model: "openai/gpt-6.2-sol#high", Instructions: "a.go only"}},
 		{"esc returns to the list and keeps the draft", []tea.KeyMsg{runes("1"), runes("x"), esc, runes("2"), enter},
 			&menuResult{Action: "review", Model: "claude-agent/opus#high", Instructions: "x"}},
 		{"past reviews need no instructions", []tea.KeyMsg{runes("3")}, &menuResult{Action: "past"}},
@@ -67,7 +67,7 @@ func TestMenuChoices(t *testing.T) {
 func TestMenuShowsTheInstructionsStepForTheChosenModel(t *testing.T) {
 	m := newMenuModel()
 	m.Update(tea.WindowSizeMsg{Width: 70, Height: 14})
-	for _, label := range []string{"GPT-6.1 Sol", "Opus (Claude Code)", "OpenCode", "Past reviews of this PR", "Post to GitHub (pending)"} {
+	for _, label := range []string{"GPT-6.2 Sol", "Opus (Claude Code)", "OpenCode", "Past reviews of this PR", "Post to GitHub (pending)"} {
 		if !strings.Contains(m.View(), label) {
 			t.Fatalf("list lacks %q:\n%s", label, m.View())
 		}

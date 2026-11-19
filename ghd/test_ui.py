@@ -150,7 +150,7 @@ def test_dashboard_runs_in_the_calling_terminal(cli, terminal, exit_code):
     assert f"TERM_PROGRAM={terminal}" in args
 
 
-@pytest.mark.parametrize("model", ["openai/gpt-6.1-sol#high", "claude-agent/opus#high"])
+@pytest.mark.parametrize("model", ["openai/gpt-6.2-sol#high", "claude-agent/opus#high"])
 def test_review_finishes_without_an_interactive_agent_prompt(cli, model):
     result, calls = cli("review", "owner/repo", "42", "opencode", model)
     assert result.returncode == 0, result.stderr
@@ -256,7 +256,7 @@ def test_review_brief_points_at_the_previous_review_of_the_same_pr(cli, tmp_path
 
 
 @pytest.mark.parametrize("choice, review_args", [
-    ({"action": "review", "model": "openai/gpt-6.1-sol#high"}, ["opencode", "openai/gpt-6.1-sol#high", "--instructions", ""]),
+    ({"action": "review", "model": "openai/gpt-6.2-sol#high"}, ["opencode", "openai/gpt-6.2-sol#high", "--instructions", ""]),
     ({"action": "review", "model": "claude-agent/opus#high", "instructions": "Only src/, it's #1\nskip $HOME"},
      ["opencode", "claude-agent/opus#high", "--instructions", "Only src/, it's #1\nskip $HOME"]),
 ])
@@ -279,7 +279,7 @@ def test_review_instructions_reach_the_reviewer_and_the_saved_metadata(cli, tmp_
     assert meta["instructions"] == instructions
 
 
-@pytest.mark.parametrize("key, model", [("ctrl+g", "claude-agent/opus#high"), ("ctrl+t", "openai/gpt-6.1-sol#high")])
+@pytest.mark.parametrize("key, model", [("ctrl+g", "claude-agent/opus#high"), ("ctrl+t", "openai/gpt-6.2-sol#high")])
 def test_review_shortcuts_run_in_a_floating_pane(cli, key, model):
     command = [arg.replace("{{.RepoName}}", "owner/repo").replace("{{.PrNumber}}", "42")
                for arg in key_command(key)]
@@ -328,9 +328,9 @@ def test_menu_opens_the_selected_picker_in_a_larger_popup(cli, action, script):
 
 
 @pytest.mark.parametrize("model, overrides, middle, weak", [
-    ("openai/gpt-6.1-sol#high", {}, "openai/gpt-6.1-terra#high", "openai/gpt-6-luna"),
+    ("openai/gpt-6.2-sol#high", {}, "openai/gpt-6.1-terra#high", "openai/gpt-6-luna"),
     ("claude-agent/opus#high", {}, "claude-agent/sonnet#high", "claude-agent/haiku"),
-    ("openai/gpt-6.1-sol#high", {"GHD_VERIFY_MODEL": "claude-agent/haiku", "GHD_MIDDLE_MODEL": "claude-agent/sonnet"},
+    ("openai/gpt-6.2-sol#high", {"GHD_VERIFY_MODEL": "claude-agent/haiku", "GHD_MIDDLE_MODEL": "claude-agent/sonnet"},
      "claude-agent/sonnet", "claude-agent/haiku"),
 ])
 def test_review_configures_middle_and_verification_models(cli, tmp_path, model, overrides, middle, weak):

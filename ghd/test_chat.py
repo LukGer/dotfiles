@@ -11,7 +11,7 @@ chat = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(chat)
 
 
-@pytest.mark.parametrize("model", ["openai/gpt-6.1-sol#high", "claude-agent/opus#high"])
+@pytest.mark.parametrize("model", ["openai/gpt-6.2-sol#high", "claude-agent/opus#high"])
 @pytest.mark.parametrize("diff", ["+changed line", "+large diff\n" * 50000])
 def test_pr_chat_supplies_snapshot_without_putting_large_diffs_in_arguments(monkeypatch, model, diff):
     view = {"title": "Example", "body": "PR requirements", "url": "https://github.com/o/r/pull/1",

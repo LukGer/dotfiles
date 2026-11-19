@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 import { blockedCommand, duplicateOf, renderMarkdown, specialistError } from "./review-lib.ts";
 
 describe("specialistError", () => {
-  const strong = "openai/gpt-6.1-sol#high", middle = "openai/gpt-6.1-terra#high";
+  const strong = "openai/gpt-6.2-sol#high", middle = "openai/gpt-6.1-terra#high";
   for (const [mode, model, error] of [
     ["specialists", undefined, null],
     ["specialists", strong, null],
@@ -83,7 +83,7 @@ describe("renderMarkdown", () => {
     passes: [{ specialist: "correctness", status: "ran" }, { specialist: "deep", status: "skipped", note: "no trigger" }],
     coverage_gaps: ["Jira unavailable"],
   };
-  const md = renderMarkdown(review, { repo: "o/r", pr: 7, title: "T", tool: "opencode", model: "openai/gpt-6.1-sol#high", sha: "abcdef1234" });
+  const md = renderMarkdown(review, { repo: "o/r", pr: 7, title: "T", tool: "opencode", model: "openai/gpt-6.2-sol#high", sha: "abcdef1234" });
 
   test("orders findings by severity with pointers", () => {
     const rows = md.split("\n").filter((l) => /^\| \d /.test(l));
@@ -92,7 +92,7 @@ describe("renderMarkdown", () => {
     assert.match(rows[1], /\| 2 \| quality \| P3 \| a\.ts:10 \| Rename it\. \|/);
   });
   for (const expected of ["# o/r#7 T", "Looks good apart from one bug.", "| Unused import | already on the PR |",
-    "| Old crash | fixed |", "correctness ran", "deep skipped (no trigger)", "- Jira unavailable", "abcdef1 · opencode openai/gpt-6.1-sol#high"]) {
+    "| Old crash | fixed |", "correctness ran", "deep skipped (no trigger)", "- Jira unavailable", "abcdef1 · opencode openai/gpt-6.2-sol#high"]) {
     test(`contains ${expected}`, () => assert.ok(md.includes(expected), md));
   }
   test("omits empty sections", () => {

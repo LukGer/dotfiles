@@ -15,7 +15,7 @@ if [[ -n $tool && $tool != opencode ]]; then
   print -u2 'Reviews use OpenCode: ghd review <owner/repo> <pr> opencode [provider/model#variant]'
   exit 1
 fi
-model=${4:-openai/gpt-6.1-sol#high}
+model=${4:-openai/gpt-6.2-sol#high}
 
 if [[ -z $tool ]]; then
   selection=$(mktemp -t ghd-menu)

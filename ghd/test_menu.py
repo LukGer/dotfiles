@@ -98,7 +98,7 @@ elif name == 'glow':
         )
         output = b""
         deadline = time.monotonic() + 5
-        while not all(label in output for label in (b"GPT-6.1 Sol", b"Opus (Claude Code)", b"OpenCode", b"Past reviews", b"Post to GitHub")):
+        while not all(label in output for label in (b"GPT-6.2 Sol", b"Opus (Claude Code)", b"OpenCode", b"Past reviews", b"Post to GitHub")):
             assert time.monotonic() < deadline, "menu did not draw all choices"
             if select.select([master], [], [], .05)[0]:
                 output += os.read(master, 65536)

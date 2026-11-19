@@ -2,7 +2,7 @@
 
 [gh-dash](https://github.com/dlvhdr/gh-dash) in your current terminal. From
 any PR you can open the diff or full description in a tab, chat about its changes,
-run a GPT-6.1 Sol or Opus (Claude Code) review, and turn the findings you tick into a
+run a GPT-6.2 Sol or Opus (Claude Code) review, and turn the findings you tick into a
 **pending** GitHub review.
 
 The idea and most of the original scripts are Valentin's. This version uses
@@ -29,7 +29,7 @@ viewers run in place.
 
 | Key | Action |
 | --- | --- |
-| `ctrl+g` / `ctrl+t` | Opus (Claude Code) / GPT-6.1 Sol high review (both through OpenCode) in a popup in this window |
+| `ctrl+g` / `ctrl+t` | Opus (Claude Code) / GPT-6.2 Sol high review (both through OpenCode) in a popup in this window |
 | `c` | Chat with the PR: choose a model, then ask questions about its diff |
 | `f` | Menu: review models (then instructions), past reviews of this PR, post, chat |
 | `E` | Past reviews of every PR: `enter` reads one here, `ctrl-y` copies it |
@@ -93,7 +93,7 @@ change the release and toolchain in `dash` and rebase `gh-dash.patch`.
 
 ## Chat with a PR
 
-Press `c`, or choose **Chat with PR** from `f`, then choose GPT-6.1 Sol or
+Press `c`, or choose **Chat with PR** from `f`, then choose GPT-6.2 Sol or
 Opus (Claude Code). OpenCode opens its full-screen conversation with the PR description and full
 diff loaded as context. Use the mouse wheel or Page Up/Page Down to read older
 messages inside the popup. It starts with a brief overview; ask follow-up questions directly,
@@ -101,7 +101,7 @@ such as “Why did this change?” or “Walk me through the new error handling.
 
 ```sh
 ghd chat owner/repo 42
-ghd chat owner/repo 42 --model 'openai/gpt-6.1-sol#high'
+ghd chat owner/repo 42 --model 'openai/gpt-6.2-sol#high'
 ```
 
 Chat fetches its context through `gh`, so it works without a local clone and
@@ -123,7 +123,7 @@ Claude subscription reviews. See [OpenCode setup and sources](opencode.md).
 
 `ghd review <owner/repo> <pr> [opencode [provider/model#variant]] [--instructions <text>]`
 also works from any shell. The dashboard uses OpenCode with
-`openai/gpt-6.1-sol#high` or `claude-agent/opus#high`. Opus follows Claude Code's
+`openai/gpt-6.2-sol#high` or `claude-agent/opus#high`. Opus follows Claude Code's
 advertised alias; it is not pinned to a guessed model identifier. Reviews run
 only through OpenCode. Human instructions end the brief,
 reach every specialist verbatim, and appear in the saved metadata and review.
@@ -172,7 +172,7 @@ reach every specialist verbatim, and appear in the saved metadata and review.
 
    | Tier | OpenAI | Claude | Used for |
    | --- | --- | --- | --- |
-   | strong (selected) | `gpt-6.1-sol#high` | `opus#high` | orchestrator, single pass, correctness, deep, security, risk, escalation |
+   | strong (selected) | `gpt-6.2-sol#high` | `opus#high` | orchestrator, single pass, correctness, deep, security, risk, escalation |
    | middle | `gpt-6.1-terra#high` | `sonnet#high` | quality, design, completeness |
    | weak | `gpt-6-luna` | `haiku` | verification |
 

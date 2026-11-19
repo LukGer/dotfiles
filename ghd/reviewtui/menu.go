@@ -19,7 +19,7 @@ type menuItem struct {
 }
 
 var modelItems = []menuItem{
-	{"GPT-6.1 Sol", "high · OpenCode", "review", "openai/gpt-6.1-sol#high"},
+	{"GPT-6.2 Sol", "high · OpenCode", "review", "openai/gpt-6.2-sol#high"},
 	{"Opus (Claude Code)", "high · OpenCode", "review", "claude-agent/opus#high"},
 }
 
