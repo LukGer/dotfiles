@@ -41,7 +41,9 @@ elif name == 'tmux':
     if os.environ.get('TMUX_FAIL'):
         sys.exit(1)
     child_env = {**os.environ, 'TERM_PROGRAM': 'tmux'}
-    if args[0] == 'display-popup' and os.environ.get('MENU_CHOICE') and ' menu ' in args[-1]:
+    if args == ['list-commands', 'new-pane'] and not os.environ.get('TMUX_LEGACY'):
+        print('new-pane (newp)')
+    elif args[0] == 'display-popup' and os.environ.get('MENU_CHOICE') and ' menu ' in args[-1]:
         pathlib.Path(shlex.split(args[-1])[-1]).write_text(os.environ['MENU_CHOICE'])
     elif args[0] == 'display-popup' and os.environ.get('RUN_POPUP'):
         sys.exit(subprocess.call(args[-1], shell=True, env=child_env))
@@ -90,6 +92,11 @@ def key_command(key):
     lines = (ROOT / "config/gh-dash/config.yml").read_text().splitlines()
     start = lines.index(f"    - key: {key}")
     return shlex.split(next(line.split("command: ", 1)[1] for line in lines[start:] if "command: " in line))
+
+
+def floating_command(calls):
+    args = next(args for name, *args in calls if name == "tmux" and "new-pane" in args and ";" in args)
+    return shlex.split(args[-1])
 
 
 def test_f_key_opens_a_floating_review_menu(cli):
@@ -253,12 +260,10 @@ def test_review_brief_points_at_the_previous_review_of_the_same_pr(cli, tmp_path
     ({"action": "review", "model": "claude-agent/opus#high", "instructions": "Only src/, it's #1\nskip $HOME"},
      ["opencode", "claude-agent/opus#high", "--instructions", "Only src/, it's #1\nskip $HOME"]),
 ])
-def test_menu_launches_review_in_the_dashboard_popup(cli, choice, review_args):
+def test_menu_launches_review_in_a_floating_pane(cli, choice, review_args):
     result, calls = cli("review", "owner/repo", "42", MENU_CHOICE=json.dumps(choice))
     assert result.returncode == 0, result.stderr
-    popups = [args for name, *args in calls if name == "tmux" and args[0] == "display-popup"]
-    assert len(popups) == 2, calls
-    assert shlex.split(popups[-1][-1])[-2 - len(review_args):] == ["owner/repo", "42", *review_args]
+    assert floating_command(calls)[-2 - len(review_args):] == ["owner/repo", "42", *review_args]
     assert not any(name == "osascript" for name, *_ in calls)
 
 
@@ -275,14 +280,20 @@ def test_review_instructions_reach_the_reviewer_and_the_saved_metadata(cli, tmp_
 
 
 @pytest.mark.parametrize("key, model", [("ctrl+g", "claude-agent/opus#high"), ("ctrl+t", "openai/gpt-6.1-sol#high")])
-def test_review_shortcuts_run_in_the_dashboard_popup(cli, key, model):
+def test_review_shortcuts_run_in_a_floating_pane(cli, key, model):
     command = [arg.replace("{{.RepoName}}", "owner/repo").replace("{{.PrNumber}}", "42")
                for arg in key_command(key)]
     result, calls = cli(*command[1:])
     assert result.returncode == 0, result.stderr
-    popup = next(args for name, *args in calls if name == "tmux" and args[0] == "display-popup")
-    assert shlex.split(popup[-1])[-4:] == ["owner/repo", "42", "opencode", model]
+    assert floating_command(calls)[-4:] == ["owner/repo", "42", "opencode", model]
     assert not any(name == "osascript" for name, *_ in calls)
+
+
+def test_review_uses_a_popup_on_older_tmux(cli):
+    result, calls = cli("open", "floating", "ghd", "review", "owner/repo", "42", "opencode", TMUX_LEGACY="1")
+    assert result.returncode == 0, result.stderr
+    popup = next(args for name, *args in calls if name == "tmux" and args[0] == "display-popup")
+    assert shlex.split(popup[-1])[-5:] == ["ghd", "review", "owner/repo", "42", "opencode"]
 
 
 @pytest.mark.parametrize("tool", ["opencode"])

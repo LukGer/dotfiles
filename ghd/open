@@ -1,15 +1,21 @@
 #!/bin/zsh
-# Usage: ghd open tab|split|window|popup <command> [args...]
+# Usage: ghd open tab|split|window|popup|floating <command> [args...]
 #
 # Runs the command in a new Ghostty surface with this shell's PATH and working
 # directory. Ghostty runs it as `exec -l <command>`, so it must be one command,
 # not a shell snippet. Outside Ghostty the command runs here instead.
 
 kind=$1; shift
-if [[ $kind == popup ]]; then
+if [[ $kind == (popup|floating) ]]; then
   if [[ -n $TMUX ]]; then
+    command="env TERM_PROGRAM=${(qq)TERM_PROGRAM} ${(j: :)${(qq)@}}"
+    if [[ $kind == floating && $(tmux list-commands new-pane 2>/dev/null) == 'new-pane '* ]]; then
+      setup='tmux set-option -p -t "$TMUX_PANE" @ghd-floating 1 \; move-pane -t "$TMUX_PANE" -P centre'
+      exec tmux source-file "${0:A:h}/floating.conf" \; \
+        new-pane -AOKW -x 90% -y 80% -B single -c "$PWD" -e "PATH=$PATH" "$setup && exec $command"
+    fi
     exec tmux display-popup -E -x C -y C -w 90% -h 80% -b rounded \
-      -d "$PWD" -e "PATH=$PATH" "env TERM_PROGRAM=${(qq)TERM_PROGRAM} ${(j: :)${(qq)@}}"
+      -d "$PWD" -e "PATH=$PATH" "$command"
   fi
   exec "$@"
 fi

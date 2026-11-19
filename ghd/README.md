@@ -47,6 +47,8 @@ for a full review), alt+enter or ctrl+j adds a line, and escape returns to the
 models with the draft kept. The menu is `ghd tui menu`, part of the review screen.
 The `f` key launches it through a background tmux job so gh-dash resumes
 rendering behind the popup instead of staying suspended on a blank screen.
+On tmux 3.8 and later, the review pane stays centred and resizes with the
+dashboard. Earlier versions open the review in a fixed-size popup.
 History and posting pickers open in floating popups and close when you are done.
 Escape or `q` cancels the chooser. It uses a modal popup because
 [`tmux display-menu` returns immediately in tmux 3.8](https://github.com/tmux/tmux/blob/3.8/cmd-display-menu.c#L553),
