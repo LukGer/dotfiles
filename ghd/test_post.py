@@ -41,7 +41,7 @@ def test_selected_findings_post_without_reading_terminal_input(tmp_path, monkeyp
         if query == post.PR_QUERY:
             return {"repository": {"pullRequest": {
                 "id": "pr", "headRefOid": "abc",
-                "reviews": {"nodes": [{"id": "existing"}] if pending else []},
+                "reviews": {"nodes": [{"id": "existing", "body": ""}] if pending else []},
             }}}
         mutations.append((query, variables["input"]))
         return {"addPullRequestReview": {"pullRequestReview": {"id": "new"}}}
@@ -76,7 +76,7 @@ def test_post_report_identifies_only_posted_findings(tmp_path, monkeypatch, caps
         if query == post.PR_QUERY:
             return {"repository": {"pullRequest": {
                 "id": "pr", "headRefOid": "new",
-                "reviews": {"nodes": [{"id": "existing"}] if pending else []},
+                "reviews": {"nodes": [{"id": "existing", "body": ""}] if pending else []},
             }}}
         mutations.append(query)
         if query == post.ADD_THREAD and variables["input"]["line"] == 3 and fail:
@@ -100,6 +100,51 @@ def test_post_report_identifies_only_posted_findings(tmp_path, monkeypatch, caps
         assert post.CREATE_REVIEW not in mutations
     if fail:
         assert "Cannot add thread" in report["message"]
+
+
+@pytest.mark.parametrize("pending, event, message, fail, submitted, summary", [
+    (None, None, None, None, None, "added to your pending review"),
+    (None, "COMMENT", None, None, ("new", "COMMENT", "Summary\n\n(added by AI)"), "review posted"),
+    (None, "APPROVE", "LGTM", None, ("new", "APPROVE", "LGTM\n\nSummary\n\n(added by AI)"), "review approved"),
+    ("Mine", "APPROVE", "LGTM", None, ("existing", "APPROVE", "LGTM\n\nMine"), "review approved"),
+    ("", "APPROVE", "", None, ("existing", "APPROVE", ""), "review approved"),
+    (None, "APPROVE", "LGTM", post.ADD_THREAD, None, "left pending"),
+    (None, "APPROVE", "LGTM", post.SUBMIT_REVIEW, None, "left pending"),
+])
+def test_post_submits_the_review_with_the_chosen_event(tmp_path, monkeypatch, capsys, pending, event, message, fail, submitted, summary):
+    path = tmp_path / "review.findings"
+    path.write_text(json.dumps({"tldr": "Summary", "findings": [{
+        "file": "f.ts", "line": 2, "severity": "P1", "category": "bug", "title": "Bug", "comment": "Fix this.",
+    }]}))
+    monkeypatch.setattr(post, "pick_review", lambda *args: (str(path), {"sha": "abc"}))
+    monkeypatch.setattr(post, "diff_files", lambda *args: DIFF)
+    submits = []
+
+    def graphql(query, **variables):
+        if query == post.PR_QUERY:
+            return {"repository": {"pullRequest": {
+                "id": "pr", "headRefOid": "abc",
+                "reviews": {"nodes": [] if pending is None else [{"id": "existing", "body": pending}]},
+            }}}
+        if query == fail:
+            raise RuntimeError("GitHub said no")
+        if query == post.SUBMIT_REVIEW:
+            i = variables["input"]
+            submits.append((i["pullRequestReviewId"], i["event"], i["body"]))
+        return {"addPullRequestReview": {"pullRequestReview": {"id": "new"}}}
+
+    monkeypatch.setattr(post, "graphql", graphql)
+    args = ["owner/repo", "42", "--review", str(path), "--pick", "1", "--json",
+            *(["--event", event] if event else []), *(["--message", message] if message is not None else [])]
+    if fail:
+        with pytest.raises(SystemExit, match="1"):
+            post.main(args)
+    else:
+        post.main(args)
+    assert submits == ([submitted] if submitted else [])
+    report = json.loads(capsys.readouterr().out)
+    assert summary in report["message"]
+    assert report["posted"] == ([] if fail == post.ADD_THREAD else [1])
 
 
 @pytest.mark.parametrize("review, message", [

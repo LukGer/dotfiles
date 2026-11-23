@@ -71,14 +71,75 @@ func TestPostPassesTheSelectedPositions(t *testing.T) {
 		{File: "c", Line: 3, Category: "bug", Severity: "P2", Title: "bug2"},
 	}
 	m := savedReview(t, Meta{Repo: "o/r", PR: 7, Tool: "opencode"}, findings)
-	cmd, _ := m.postCommand()
-	joined := strings.Join(cmd.Args, " ")
-	if cmd.Args[1] != "/lib/post.py" || !strings.Contains(joined, "o/r 7 --json --review") || !strings.HasSuffix(joined, "--pick 2,3") {
-		t.Fatalf("got %v", cmd.Args)
+	for _, tc := range []struct{ event, message, suffix string }{
+		{"", "", "--pick 2,3"},
+		{"COMMENT", "", "--pick 2,3 --event COMMENT"},
+		{"APPROVE", "Ship it", "--pick 2,3 --event APPROVE --message Ship it"},
+	} {
+		cmd := m.postCommand(tc.event, tc.message)
+		joined := strings.Join(cmd.Args, " ")
+		if cmd.Args[1] != "/lib/post.py" || !strings.Contains(joined, "o/r 7 --json --review") || !strings.HasSuffix(joined, tc.suffix) {
+			t.Fatalf("%+v: got %v", tc, cmd.Args)
+		}
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
-	if cmd, status := m.postCommand(); cmd != nil || status != "nothing selected" {
-		t.Fatalf("expected nothing selected, got %q", status)
+	m.Update(keyMsg("n"))
+	m.Update(keyMsg("p"))
+	if m.mode != reviewing || m.status != "nothing selected" {
+		t.Fatalf("expected nothing selected, got mode %d status %q", m.mode, m.status)
+	}
+}
+
+func keyMsg(k string) tea.KeyMsg {
+	switch k {
+	case "enter":
+		return tea.KeyMsg{Type: tea.KeyEnter}
+	case "esc":
+		return tea.KeyMsg{Type: tea.KeyEsc}
+	case "down":
+		return tea.KeyMsg{Type: tea.KeyDown}
+	}
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
+}
+
+func TestPostAsksHowToPost(t *testing.T) {
+	for _, tc := range []struct {
+		keys []string
+		args string
+	}{
+		{[]string{"enter"}, "--pick 1"},
+		{[]string{"2"}, "--pick 1 --event COMMENT"},
+		{[]string{"down", "enter"}, "--pick 1 --event COMMENT"},
+		{[]string{"3", "L", "G", "T", "M", "enter"}, "--pick 1 --event APPROVE --message LGTM"},
+		{[]string{"3", "enter"}, "--pick 1 --event APPROVE"},
+		{[]string{"3", "esc", "esc"}, ""},
+	} {
+		t.Run(strings.Join(tc.keys, "+"), func(t *testing.T) {
+			m := savedReview(t, Meta{Repo: "o/r", PR: 7}, []Finding{{Severity: "P1", Category: "bug"}})
+			m.lib = t.TempDir()
+			script := "import json, sys\nprint(json.dumps({'message': ' '.join(sys.argv[1:]), 'posted': [1]}))\n"
+			os.WriteFile(filepath.Join(m.lib, "post.py"), []byte(script), 0o600)
+			m.Update(keyMsg("p"))
+			if !strings.Contains(m.View(), "Approve with a message") {
+				t.Fatalf("p did not offer the ways to post: %s", m.View())
+			}
+			var cmd tea.Cmd
+			for _, k := range tc.keys {
+				_, cmd = m.Update(keyMsg(k))
+				if k == "3" && !strings.Contains(m.View(), "Approval message") {
+					t.Fatalf("approve did not ask for a message: %s", m.View())
+				}
+			}
+			if tc.args == "" {
+				if cmd != nil || m.mode != reviewing {
+					t.Fatalf("esc did not return to findings: mode %d", m.mode)
+				}
+				return
+			}
+			m.Update(cmd())
+			if !strings.HasSuffix(m.postOutput, tc.args) {
+				t.Fatalf("posted with %q, want suffix %q", m.postOutput, tc.args)
+			}
+		})
 	}
 }
 
@@ -96,7 +157,8 @@ func TestPostStaysInTheReviewScreen(t *testing.T) {
 				script += "sys.exit(1)\n"
 			}
 			os.WriteFile(filepath.Join(m.lib, "post.py"), []byte(script), 0o600)
-			_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+			m.Update(keyMsg("p"))
+			_, cmd := m.Update(keyMsg("enter"))
 			if cmd == nil || !strings.Contains(m.View(), "Posting") {
 				t.Fatal("post did not start inside the review screen")
 			}

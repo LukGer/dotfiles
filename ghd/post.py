@@ -2,9 +2,11 @@
 """Pick findings from a saved review and add them to your pending GitHub review.
 
 Usage: ghd post <owner/repo> <pr> [--dry] [--review <findings file>] [--pick 1,3,...]
+                [--event COMMENT|APPROVE [--message <text>]]
 
-Never submits: the review stays pending until you submit it on GitHub. An
-existing pending review is added to, never replaced.
+Without --event the review stays pending until you submit it on GitHub; with it
+the review is submitted, the message heading its body. An existing pending
+review is added to, never replaced.
 """
 from __future__ import annotations
 
@@ -103,11 +105,14 @@ def graphql(query: str, **variables) -> dict:
 
 PR_QUERY = """query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) { pullRequest(number: $number) {
-    id headRefOid reviews(states: PENDING, first: 1) { nodes { id } } } } }"""
+    id headRefOid reviews(states: PENDING, first: 1) { nodes { id body } } } } }"""
 CREATE_REVIEW = """mutation($input: AddPullRequestReviewInput!) {
   addPullRequestReview(input: $input) { pullRequestReview { id } } }"""
 ADD_THREAD = """mutation($input: AddPullRequestReviewThreadInput!) {
   addPullRequestReviewThread(input: $input) { thread { id } } }"""
+SUBMIT_REVIEW = """mutation($input: SubmitPullRequestReviewInput!) {
+  submitPullRequestReview(input: $input) { pullRequestReview { id } } }"""
+SUBMITTED = {"COMMENT": "review posted", "APPROVE": "review approved"}
 
 
 def thread_input(finding: dict) -> dict:
@@ -165,6 +170,8 @@ def main(argv: list[str]) -> None:
     parser.add_argument("--json", action="store_true", help="return the posting report and posted finding positions as JSON")
     parser.add_argument("--review", help="use this saved findings file without a review picker")
     parser.add_argument("--pick", help="post these findings (1-based positions in the saved review) without the picker")
+    parser.add_argument("--event", choices=SUBMITTED, help="submit the review instead of leaving it pending")
+    parser.add_argument("--message", default="", help="text heading the submitted review's body")
     args = parser.parse_args(argv)
     repo, pr, dry = args.repo, args.pr, args.dry
 
@@ -213,11 +220,13 @@ def main(argv: list[str]) -> None:
         note = f" ({placement['note']})" if placement["note"] else ""
         notes.append(f"{f['file']} {position(placement)}{note}")
 
-    if not threads and not body:
+    submit_body = "\n\n".join(filter(None, [args.message.strip(), pending["body"] if pending else body]))
+    if not threads and not body and args.event != "APPROVE":
         return report("\n".join(["Nothing to post.", *notes]))
     if dry:
         payload = {"review": None if pending else {"pullRequestId": pull["id"], "commitOID": pull["headRefOid"], "body": body},
-                   "threads": [thread_input(f) for f in threads]}
+                   "threads": [thread_input(f) for f in threads],
+                   "submit": {"event": args.event, "body": submit_body} if args.event else None}
         return report("\n".join(["Dry run: nothing posted.", json.dumps(payload, indent=2, ensure_ascii=False), *notes]))
 
     review_id = pending["id"] if pending else graphql(CREATE_REVIEW, input={
@@ -232,7 +241,19 @@ def main(argv: list[str]) -> None:
             failed.append(f"{f['file']}:{f['line']} {error}")
     included = [*posted, *([] if pending else folded)]
     positions = [i + 1 for i, f in enumerate(findings) if any(f is item for item in included)]
-    summary = f"{len(posted)} comment(s) added to your pending review. Submit it at https://github.com/{repo}/pull/{pr}/files"
+    url = f"https://github.com/{repo}/pull/{pr}"
+    submitted = False
+    if args.event and not failed:
+        try:
+            graphql(SUBMIT_REVIEW, input={"pullRequestReviewId": review_id, "event": args.event, "body": submit_body})
+            submitted = True
+        except RuntimeError as error:
+            failed.append(f"Submitting the review: {error}")
+    if submitted:
+        summary = f"{len(posted)} comment(s) added and {SUBMITTED[args.event]}: {url}"
+    else:
+        left = " Something failed, so it was left pending." if args.event else ""
+        summary = f"{len(posted)} comment(s) added to your pending review.{left} Submit it at {url}/files"
     report("\n\n".join([summary, *notes, *(["Failed:", *failed] if failed else [])]), positions)
     if failed:
         raise SystemExit(1)

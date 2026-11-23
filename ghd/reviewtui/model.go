@@ -8,9 +8,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
@@ -24,9 +26,18 @@ const (
 	running mode = iota
 	failed
 	reviewing
+	choosingPost
+	approving
 	posting
 	postResult
 )
+
+// postChoices are the ways to post the ticked findings; event is ghd post's --event.
+var postChoices = []struct{ label, event string }{
+	{"Add to my pending review", ""},
+	{"Post as review comments", "COMMENT"},
+	{"Approve with a message", "APPROVE"},
+}
 
 type pass struct {
 	Label string
@@ -87,6 +98,8 @@ type model struct {
 	showMD     bool
 	dry        bool
 	postOutput string
+	postCursor int
+	message    textarea.Model
 	files      map[string][][]DiffLine
 	status     string
 	width      int
@@ -97,7 +110,7 @@ type model struct {
 }
 
 func newModel(out, lib string, command []string) (*model, error) {
-	m := &model{out: out, lib: lib, follow: true, started: time.Now(), selected: map[int]bool{}}
+	m := &model{out: out, lib: lib, follow: true, started: time.Now(), selected: map[int]bool{}, message: newInput("e.g. Looks good, thanks!")}
 	if err := readJSON(out+".json", &m.meta); err != nil {
 		return nil, fmt.Errorf("no review metadata at %s.json: %w", out, err)
 	}
@@ -271,6 +284,38 @@ func (m *model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case failed:
 		return m, tea.Quit
+	case choosingPost:
+		switch k {
+		case "esc":
+			m.mode = reviewing
+		case "ctrl+c":
+			return m, tea.Quit
+		case "up", "k":
+			m.postCursor = (m.postCursor + len(postChoices) - 1) % len(postChoices)
+		case "down", "j":
+			m.postCursor = (m.postCursor + 1) % len(postChoices)
+		case "enter":
+			return m, m.choosePost(m.postCursor)
+		default:
+			if n, err := strconv.Atoi(k); err == nil && n >= 1 && n <= len(postChoices) {
+				return m, m.choosePost(n - 1)
+			}
+		}
+	case approving:
+		switch k {
+		case "esc":
+			m.mode = choosingPost
+			m.message.Blur()
+		case "ctrl+c":
+			return m, tea.Quit
+		case "enter":
+			m.message.Blur()
+			return m, m.post("APPROVE", strings.TrimSpace(m.message.Value()))
+		default:
+			var cmd tea.Cmd
+			m.message, cmd = m.message.Update(msg)
+			return m, cmd
+		}
 	case posting:
 		return m, nil
 	case postResult:
@@ -311,7 +356,11 @@ func (m *model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "e":
 			return m, m.edit()
 		case "p":
-			return m, m.post()
+			if m.picked() == 0 {
+				m.status = "nothing selected"
+			} else {
+				m.mode, m.postCursor, m.status = choosingPost, 0, ""
+			}
 		case "c":
 			return m, m.resume()
 		default:
@@ -351,13 +400,18 @@ func (m *model) edit() tea.Cmd {
 	return tea.ExecProcess(cmd, func(err error) tea.Msg { return editDoneMsg{file.Name(), err} })
 }
 
-func (m *model) post() tea.Cmd {
-	cmd, status := m.postCommand()
-	if cmd == nil {
-		m.status = status
-		return nil
+func (m *model) choosePost(i int) tea.Cmd {
+	m.postCursor = i
+	if event := postChoices[i].event; event != "APPROVE" {
+		return m.post(event, "")
 	}
-	m.mode, m.status = posting, ""
+	m.mode = approving
+	return m.message.Focus()
+}
+
+func (m *model) post(event, message string) tea.Cmd {
+	cmd := m.postCommand(event, message)
+	m.mode = posting
 	return func() tea.Msg {
 		output, err := cmd.CombinedOutput()
 		var report struct {
@@ -385,17 +439,20 @@ func (m *model) run(cmd *exec.Cmd, status string) tea.Cmd {
 	return tea.ExecProcess(cmd, func(err error) tea.Msg { return actionDoneMsg{err} })
 }
 
-// postCommand posts the ticked findings through ghd post without its picker.
-func (m *model) postCommand() (*exec.Cmd, string) {
-	picks := Picks(m.selected)
-	if picks == "" {
-		return nil, "nothing selected"
-	}
-	cmd := exec.Command("python3", filepath.Join(m.lib, "post.py"), m.meta.Repo, fmt.Sprint(m.meta.PR), "--json", "--review", m.out+".findings", "--pick", picks)
+// postCommand posts the ticked findings through ghd post without its picker,
+// submitting the review as event when there is one.
+func (m *model) postCommand(event, message string) *exec.Cmd {
+	cmd := exec.Command("python3", filepath.Join(m.lib, "post.py"), m.meta.Repo, fmt.Sprint(m.meta.PR), "--json", "--review", m.out+".findings", "--pick", Picks(m.selected))
 	if m.dry {
 		cmd.Args = append(cmd.Args, "--dry")
 	}
-	return cmd, ""
+	if event != "" {
+		cmd.Args = append(cmd.Args, "--event", event)
+	}
+	if message != "" {
+		cmd.Args = append(cmd.Args, "--message", message)
+	}
+	return cmd
 }
 
 // resumeCommand reopens the reviewer's conversation in its worktree.
@@ -422,6 +479,7 @@ func (m *model) layout() {
 	body := max(m.height-5, 3)
 	m.log = viewport.New(max(m.width-m.sideWidth()-3, 1), body)
 	m.detail = viewport.New(max(m.width-m.listWidth()-3, 1), body)
+	m.message.SetWidth(inputWidth(m.width))
 	m.dragging = false
 	m.refreshLog()
 	if m.mode == reviewing {
@@ -515,12 +573,36 @@ func (m *model) View() string {
 		return m.runView(header)
 	case failed:
 		return header + "\n\n" + bad.Render("Review failed") + "\n\n" + m.exitErr + "\n\n" + dim.Render("press any key")
+	case choosingPost:
+		rows := []string{""}
+		for i, choice := range postChoices {
+			rows = append(rows, choiceRow(i, i == m.postCursor, choice.label))
+		}
+		footer := dim.Render(fmt.Sprintf("1–%d choose · ↑/↓ move · enter select · esc findings", len(postChoices)))
+		return m.frame(header, m.postInfo(), strings.Join(rows, "\n"), footer)
+	case approving:
+		body := strings.Join([]string{"", bold.Render("Approval message") + dim.Render(" (optional)"), inputBox.Render(m.message.View())}, "\n")
+		return m.frame(header, m.postInfo(), body, dim.Render("enter approve · alt+enter newline · esc back"))
 	case posting:
-		return m.frame(header, "Posting selected findings…", "", dim.Render("Adding comments to your pending GitHub review…"))
+		return m.frame(header, "Posting selected findings…", "", dim.Render("Posting to GitHub…"))
 	case postResult:
 		return m.frame(header, "Posting result", paneView(m.detail), dim.Render("↑/↓/pgup/pgdn scroll · enter/esc findings · q close"))
 	}
 	return m.reviewView(header)
+}
+
+func (m *model) postInfo() string {
+	return fmt.Sprintf("Post %d selected finding(s) to %s#%d", m.picked(), m.meta.Repo, m.meta.PR)
+}
+
+func (m *model) picked() int {
+	picked := 0
+	for _, on := range m.selected {
+		if on {
+			picked++
+		}
+	}
+	return picked
 }
 
 func (m *model) runView(header string) string {
@@ -602,13 +684,7 @@ func (m *model) reviewView(header string) string {
 	if len(rows) == 0 {
 		rows = append(rows, dim.Render("No findings."))
 	}
-	picked := 0
-	for _, on := range m.selected {
-		if on {
-			picked++
-		}
-	}
-	info := fmt.Sprintf("%s %s  ·  %s  ·  %d of %d selected", m.meta.Tool, m.meta.Model, shortSHA(m.meta.SHA), picked, len(m.review.Findings))
+	info := fmt.Sprintf("%s %s  ·  %s  ·  %d of %d selected", m.meta.Tool, m.meta.Model, shortSHA(m.meta.SHA), m.picked(), len(m.review.Findings))
 	left := lipgloss.NewStyle().Width(m.listWidth()).Height(m.detail.Height).Render(strings.Join(rows, "\n"))
 	right := paneView(m.detail)
 	keys := "q close · pgup/dn scroll · space select · a/n all/none · e edit · p post · c continue · tab review/finding"

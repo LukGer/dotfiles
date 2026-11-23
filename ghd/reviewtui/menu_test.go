@@ -67,7 +67,7 @@ func TestMenuChoices(t *testing.T) {
 func TestMenuShowsTheInstructionsStepForTheChosenModel(t *testing.T) {
 	m := newMenuModel()
 	m.Update(tea.WindowSizeMsg{Width: 70, Height: 14})
-	for _, label := range []string{"GPT-6.2 Sol", "Opus (Claude Code)", "OpenCode", "Past reviews of this PR", "Post to GitHub (pending)"} {
+	for _, label := range []string{"GPT-6.2 Sol", "Opus (Claude Code)", "OpenCode", "Past reviews of this PR", "Post to GitHub"} {
 		if !strings.Contains(m.View(), label) {
 			t.Fatalf("list lacks %q:\n%s", label, m.View())
 		}

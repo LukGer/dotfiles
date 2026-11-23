@@ -3,7 +3,7 @@
 [gh-dash](https://github.com/dlvhdr/gh-dash) in your current terminal. From
 any PR you can open the diff or full description in a tab, chat about its changes,
 run a GPT-6.2 Sol or Opus (Claude Code) review, and turn the findings you tick into a
-**pending** GitHub review.
+pending, commented or approved GitHub review.
 
 The idea and most of the original scripts are Valentin's. This version uses
 Ghostty tabs for diffs and descriptions, an isolated tmux session for review
@@ -33,7 +33,7 @@ viewers run in place.
 | `c` | Chat with the PR: choose a model, then ask questions about its diff |
 | `f` | Menu: review models (then instructions), past reviews of this PR, post, chat |
 | `E` | Past reviews of every PR: `enter` reads one here, `ctrl-y` copies it |
-| `ctrl+o` | Post findings as a pending review |
+| `ctrl+o` | Post findings: pending review, review comments, or approval |
 | `d` / `D` | Diff in a new tab, side by side |
 | `i` | Full PR description in a new tab |
 | `O` | Open the selected PR's active deployment; choose an environment if several exist |
@@ -235,7 +235,8 @@ reach every specialist verbatim, and appear in the saved metadata and review.
    the pane width. `space` ticks, `a`
    and `n` tick all or none, `e` edits the comment in `$EDITOR` and saves it
    back into the findings file, `tab` switches to the full review markdown,
-   `p` immediately posts the ticked findings to your pending GitHub review.
+   `p` asks how to post the ticked findings: add them to your pending
+   GitHub review, post them as review comments, or approve with a message.
    Progress and a scrollable result stay in the review screen; Enter returns
    to the findings. Posted findings are unticked, including after a partial
    failure, so a retry only includes findings that were not posted.
@@ -262,10 +263,14 @@ To save an additional review from a separate agent conversation, use
 2. Each line is checked against the live PR diff and moved by its anchor text
    when the PR changed. A finding that cannot be placed becomes a whole-file
    comment, or a line in the review body when its file is not in the diff.
-3. Press `p` to post. Comments lead with severity, e.g. `[P1] 🐛 <comment>`,
+3. Press `p` and choose how to post. Comments lead with severity, e.g. `[P1] 🐛 <comment>`,
    with `nit:` on P3s, and end with `(added by AI)`. Findings folded into the
    review body also lead with severity. A new review gets the agent's TLDR as its body.
-4. An existing pending review is added to, never replaced. Submit it on GitHub.
+4. An existing pending review is added to, never replaced. "Add to my pending
+   review" leaves it for you to submit on GitHub; "Post as review comments"
+   and "Approve with a message" submit it (`--event COMMENT|APPROVE
+   [--message <text>]`), the message heading the review body. If any comment
+   fails to post, the review stays pending instead.
 
 `--review <findings file>` skips the review picker and uses that saved review,
 checking that it belongs to the requested PR; `--pick` names the findings by

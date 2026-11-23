@@ -25,7 +25,7 @@ var modelItems = []menuItem{
 
 var menuItems = append(modelItems, []menuItem{
 	{"Past reviews of this PR", "", "past", ""},
-	{"Post to GitHub (pending)", "", "post", ""},
+	{"Post to GitHub", "", "post", ""},
 	{"Chat with PR", "", "chat", ""},
 }...)
 
@@ -51,8 +51,13 @@ var (
 )
 
 func newMenuModel() *menuModel {
+	return &menuModel{items: menuItems, input: newInput("e.g. only review src/api/, skip generated files, focus on concurrency")}
+}
+
+// newInput is a free-text box that submits on enter and breaks lines on alt+enter.
+func newInput(placeholder string) textarea.Model {
 	input := textarea.New()
-	input.Placeholder = "e.g. only review src/api/, skip generated files, focus on concurrency"
+	input.Placeholder = placeholder
 	input.ShowLineNumbers = false
 	input.Prompt = ""
 	input.CharLimit = 0
@@ -61,7 +66,20 @@ func newMenuModel() *menuModel {
 	input.FocusedStyle.CursorLine = lipgloss.NewStyle()
 	input.FocusedStyle.Placeholder = dim
 	input.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("alt+enter", "ctrl+j"))
-	return &menuModel{items: menuItems, input: input}
+	return input
+}
+
+func inputWidth(width int) int {
+	return max(width-menuPage.GetHorizontalFrameSize()-inputBox.GetHorizontalFrameSize(), 20)
+}
+
+// choiceRow is one numbered option of a list, highlighted under the cursor.
+func choiceRow(i int, active bool, label string) string {
+	pointer, number, style := "  ", dim, lipgloss.NewStyle()
+	if active {
+		pointer, number, style = accent.Render("› "), accent, accent.Bold(true)
+	}
+	return pointer + number.Render(fmt.Sprint(i+1)) + "  " + style.Render(label)
 }
 
 func (m *menuModel) Init() tea.Cmd { return nil }
@@ -69,7 +87,7 @@ func (m *menuModel) Init() tea.Cmd { return nil }
 func (m *menuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.input.SetWidth(max(msg.Width-menuPage.GetHorizontalFrameSize()-inputBox.GetHorizontalFrameSize(), 20))
+		m.input.SetWidth(inputWidth(msg.Width))
 	case tea.KeyMsg:
 		if m.picked != nil {
 			return m.instructionsKey(msg)
@@ -152,11 +170,7 @@ func (m *menuModel) View() string {
 		if i > 0 && m.items[i-1].action == "review" && item.action != "review" {
 			rows = append(rows, "")
 		}
-		pointer, number, label := "  ", dim, lipgloss.NewStyle()
-		if i == m.cursor {
-			pointer, number, label = accent.Render("› "), accent, accent.Bold(true)
-		}
-		row := pointer + number.Render(fmt.Sprint(i+1)) + "  " + label.Render(item.label)
+		row := choiceRow(i, i == m.cursor, item.label)
 		if item.detail != "" {
 			row += strings.Repeat(" ", labelWidth-lipgloss.Width(item.label)+2) + dim.Render(item.detail)
 		}
