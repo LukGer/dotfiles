@@ -269,7 +269,9 @@ To save an additional review from a separate agent conversation, use
 4. An existing pending review is added to, never replaced. "Add to my pending
    review" leaves it for you to submit on GitHub; "Post as review comments"
    and "Approve with a message" submit it (`--event COMMENT|APPROVE
-   [--message <text>]`), the message heading the review body. If any comment
+   [--message <text>]`), the message heading the review body. An approval's
+   body is just your message (plus any findings folded into the body), without
+   the agent's TLDR. If any comment
    fails to post, the review stays pending instead.
 
 `--review <findings file>` skips the review picker and uses that saved review,

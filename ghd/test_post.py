@@ -105,8 +105,9 @@ def test_post_report_identifies_only_posted_findings(tmp_path, monkeypatch, caps
 @pytest.mark.parametrize("pending, event, message, fail, submitted, summary", [
     (None, None, None, None, None, "added to your pending review"),
     (None, "COMMENT", None, None, ("new", "COMMENT", "Summary\n\n(added by AI)"), "review posted"),
-    (None, "APPROVE", "LGTM", None, ("new", "APPROVE", "LGTM\n\nSummary\n\n(added by AI)"), "review approved"),
-    ("Mine", "APPROVE", "LGTM", None, ("existing", "APPROVE", "LGTM\n\nMine"), "review approved"),
+    ("Mine", "COMMENT", None, None, ("existing", "COMMENT", "Mine"), "review posted"),
+    (None, "APPROVE", "LGTM", None, ("new", "APPROVE", "LGTM"), "review approved"),
+    ("Summary\n\n(added by AI)", "APPROVE", "LGTM", None, ("existing", "APPROVE", "LGTM"), "review approved"),
     ("", "APPROVE", "", None, ("existing", "APPROVE", ""), "review approved"),
     (None, "APPROVE", "LGTM", post.ADD_THREAD, None, "left pending"),
     (None, "APPROVE", "LGTM", post.SUBMIT_REVIEW, None, "left pending"),
