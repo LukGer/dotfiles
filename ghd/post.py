@@ -4,11 +4,9 @@
 Usage: ghd post <owner/repo> <pr> [--dry] [--review <findings file>] [--pick 1,3,...]
                 [--event COMMENT|APPROVE [--message <text>]]
 
-Without --event the review stays pending until you submit it on GitHub; with it
-the review is submitted, the message heading its body. An approval's body is
-only the message and any findings that could not be placed on a line, without
-the review summary. An existing pending
-review is added to, never replaced.
+Without --event the review stays pending until you submit it on GitHub.
+With --event the review is submitted with only your message and any findings
+folded into the new review body because their files are outside the diff.
 """
 from __future__ import annotations
 
@@ -107,7 +105,7 @@ def graphql(query: str, **variables) -> dict:
 
 PR_QUERY = """query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) { pullRequest(number: $number) {
-    id headRefOid reviews(states: PENDING, first: 1) { nodes { id body } } } } }"""
+    id headRefOid reviews(states: PENDING, first: 1) { nodes { id } } } } }"""
 CREATE_REVIEW = """mutation($input: AddPullRequestReviewInput!) {
   addPullRequestReview(input: $input) { pullRequestReview { id } } }"""
 ADD_THREAD = """mutation($input: AddPullRequestReviewThreadInput!) {
@@ -209,8 +207,8 @@ def main(argv: list[str]) -> None:
 
     threads = [f for f in chosen if f["placement"]["kind"] != "body"]
     folded = [f for f in chosen if f["placement"]["kind"] == "body"]
-    approving = args.event == "APPROVE"
-    body = "" if pending else review_body("" if approving else data.get("tldr", ""), folded)
+    tldr = data.get("tldr", "") if args.event is None else ""
+    body = "" if pending else review_body(tldr, folded)
 
     notes = []
     if pull["headRefOid"] != meta["sha"]:
@@ -223,8 +221,8 @@ def main(argv: list[str]) -> None:
         note = f" ({placement['note']})" if placement["note"] else ""
         notes.append(f"{f['file']} {position(placement)}{note}")
 
-    submit_body = "\n\n".join(filter(None, [args.message.strip(), pending["body"] if pending and not approving else body]))
-    if not threads and not body and not approving:
+    submit_body = "\n\n".join(filter(None, [args.message.strip(), body]))
+    if not threads and not body and args.event != "APPROVE":
         return report("\n".join(["Nothing to post.", *notes]))
     if dry:
         payload = {"review": None if pending else {"pullRequestId": pull["id"], "commitOID": pull["headRefOid"], "body": body},

@@ -104,8 +104,9 @@ def test_post_report_identifies_only_posted_findings(tmp_path, monkeypatch, caps
 
 @pytest.mark.parametrize("pending, event, message, fail, submitted, summary", [
     (None, None, None, None, None, "added to your pending review"),
-    (None, "COMMENT", None, None, ("new", "COMMENT", "Summary\n\n(added by AI)"), "review posted"),
-    ("Mine", "COMMENT", None, None, ("existing", "COMMENT", "Mine"), "review posted"),
+    (None, "COMMENT", None, None, ("new", "COMMENT", ""), "review posted"),
+    ("Summary\n\n(added by AI)", "COMMENT", None, None, ("existing", "COMMENT", ""), "review posted"),
+    (None, "COMMENT", "My note", None, ("new", "COMMENT", "My note"), "review posted"),
     (None, "APPROVE", "LGTM", None, ("new", "APPROVE", "LGTM"), "review approved"),
     ("Summary\n\n(added by AI)", "APPROVE", "LGTM", None, ("existing", "APPROVE", "LGTM"), "review approved"),
     ("", "APPROVE", "", None, ("existing", "APPROVE", ""), "review approved"),
@@ -119,6 +120,7 @@ def test_post_submits_the_review_with_the_chosen_event(tmp_path, monkeypatch, ca
     }]}))
     monkeypatch.setattr(post, "pick_review", lambda *args: (str(path), {"sha": "abc"}))
     monkeypatch.setattr(post, "diff_files", lambda *args: DIFF)
+    created_bodies = []
     submits = []
 
     def graphql(query, **variables):
@@ -129,6 +131,8 @@ def test_post_submits_the_review_with_the_chosen_event(tmp_path, monkeypatch, ca
             }}}
         if query == fail:
             raise RuntimeError("GitHub said no")
+        if query == post.CREATE_REVIEW:
+            created_bodies.append(variables["input"]["body"])
         if query == post.SUBMIT_REVIEW:
             i = variables["input"]
             submits.append((i["pullRequestReviewId"], i["event"], i["body"]))
@@ -142,6 +146,7 @@ def test_post_submits_the_review_with_the_chosen_event(tmp_path, monkeypatch, ca
             post.main(args)
     else:
         post.main(args)
+    assert created_bodies == ([] if pending is not None else ["" if event else "Summary\n\n(added by AI)"])
     assert submits == ([submitted] if submitted else [])
     report = json.loads(capsys.readouterr().out)
     assert summary in report["message"]

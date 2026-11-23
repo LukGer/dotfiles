@@ -51,9 +51,9 @@ sessions would interrupt those sessions. [CLI commands](https://opencode.ai/v2/d
 Global agent files live in `~/.config/opencode/agents/`; plugins are discovered
 under `~/.config/opencode/plugins/`. `pr-review` is the primary agent,
 `ghd-reviewer` is the scoped specialist, `ghd-verifier` checks candidate findings
-on a cheaper model, and `ghd-chat` discusses the supplied
-snapshot with every tool denied. Existing skills under `~/.agents/skills` and
-repository `.agents/skills` are discovered automatically.
+on a cheaper model, and `ghd-chat` discusses the supplied snapshot and uses
+OpenCode's configured tools and permissions. Existing skills under
+`~/.agents/skills` and repository `.agents/skills` are discovered automatically.
 [Agents](https://opencode.ai/v2/docs/agents/), [plugins](https://opencode.ai/v2/docs/plugins/),
 [skills](https://opencode.ai/v2/docs/skills/)
 

@@ -109,12 +109,12 @@ never creates a checkout. The review and chat pickers share the same models;
 `--model` accepts OpenCode `provider/model#variant` references.
 Opus uses the built-in Claude Agent provider and your Claude Code login.
 
-The conversation uses a snapshot of the description and diff from launch.
-It has no tools or access to surrounding repository files; paste extra context
-when a question needs it. Large PRs must fit the selected model's context window.
-Chat doesn't post anything to GitHub or save a review. OpenCode stores the
-conversation; each launch creates a new session with a fresh snapshot. The snapshot
-is temporary context for that launch. Ctrl+X then Q exits the interface.
+The conversation starts with a snapshot of the description and diff. It can use
+OpenCode's tools to look up current GitHub context, including inline review
+comments and replies. Large PRs must fit the selected model's context window.
+OpenCode stores the conversation. Each launch creates a new session with a fresh
+snapshot. The snapshot is temporary context for that launch. Ctrl+X then Q exits
+the interface.
 
 ## Reviews
 
@@ -265,14 +265,13 @@ To save an additional review from a separate agent conversation, use
    comment, or a line in the review body when its file is not in the diff.
 3. Press `p` and choose how to post. Comments lead with severity, e.g. `[P1] 🐛 <comment>`,
    with `nit:` on P3s, and end with `(added by AI)`. Findings folded into the
-   review body also lead with severity. A new review gets the agent's TLDR as its body.
-4. An existing pending review is added to, never replaced. "Add to my pending
-   review" leaves it for you to submit on GitHub; "Post as review comments"
-   and "Approve with a message" submit it (`--event COMMENT|APPROVE
-   [--message <text>]`), the message heading the review body. An approval's
-   body is just your message (plus any findings folded into the body), without
-   the agent's TLDR. If any comment
-   fails to post, the review stays pending instead.
+   review body also lead with severity.
+4. "Add to my pending review" puts the agent's TLDR in a new draft or keeps
+   the existing draft body. You submit the review on GitHub. "Post as review
+   comments" and "Approve with a message" submit it (`--event COMMENT|APPROVE
+   [--message <text>]`). The submitted body contains only your optional message
+   and any findings folded into a new review body. If any comment fails to post,
+   the review stays pending.
 
 `--review <findings file>` skips the review picker and uses that saved review,
 checking that it belongs to the requested PR; `--pick` names the findings by
