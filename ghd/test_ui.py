@@ -127,15 +127,15 @@ def test_picker_keys_open_popups(cli, key):
     assert not any(name == "osascript" for name, *_ in calls)
 
 
-def test_dashboard_starts_in_isolated_tmux_even_from_another_session(cli):
+def test_dashboard_starts_in_its_own_tmux_even_from_another_session(cli):
     result, calls = cli("start")
     assert result.returncode == 0, result.stderr
     launches = [args for name, *args in calls if name == "tmux"]
     assert len(launches) == 1, calls
     args = launches[0]
-    assert args[:2] == ["-L", "ghd"]
-    assert "new-session" in args and "-A" in args
-    assert args[-1] == str(ROOT / "ghd/dash")
+    assert args[0] == "-L"
+    assert "new-session" in args and "-A" not in args
+    assert str(ROOT / "ghd/dash") in args
     assert not any(name == "osascript" for name, *_ in calls)
 
 
@@ -392,6 +392,25 @@ def checked_out_pr(tmp_path, commits: int):
     git("update-ref", "refs/pull/42/head", shas[-1])
     subprocess.run(["git", "clone", "-q", str(origin), str(tmp_path / "clones/repo")], check=True)
     return [base, *shas]
+
+
+def test_reviews_of_same_pr_started_in_same_second_use_separate_files_and_worktrees(cli, tmp_path):
+    _, head = checked_out_pr(tmp_path, 1)
+    date = tmp_path / "date"
+    date.write_text("#!/bin/sh\nprintf '20261124-120000\\n'\n")
+    date.chmod(0o755)
+    worktrees = []
+    for _ in range(2):
+        result, calls = cli("review", "owner/repo", "42", "opencode", input_text="r",
+                            REAL_GIT=shutil.which("git"), PR_HEAD=head, HOME=str(tmp_path))
+        assert result.returncode == 0, result.stderr
+        for command, *args in calls:
+            if command == "git" and "add" in args and "worktree" in args:
+                worktrees.append(Path(args[-2]))
+
+    assert len(list((tmp_path / "reviews").glob("*.findings"))) == 2
+    assert len(set(worktrees)) == 2
+    assert all(not path.exists() for path in worktrees)
 
 
 @pytest.mark.parametrize("previous_known, mode", [(True, "single"), (False, "specialists")])

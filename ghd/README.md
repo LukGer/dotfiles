@@ -16,9 +16,10 @@ popups, menus and pickers, [OpenCode V2](https://opencode.ai/v2/docs/) as the re
 ghd
 ```
 
-Runs gh-dash in the terminal where you invoke it, inside its own tmux server
-(`-L ghd`) with no status bar or personal tmux configuration. Quitting returns
-to your existing shell prompt, preserving your configuration and working directory.
+Each `ghd` launch opens gh-dash in its own tmux server in the current terminal.
+Live reviews stay in that terminal, and saved reviews are available from every
+dashboard. Detaching closes that dashboard. Quitting returns to your existing
+shell prompt, preserving your configuration and working directory.
 Needs `jq` (ships with macOS), `gh`, `tmux` 3.3+, `glow`, `delta` and
 `mise`, which `script/install` provides. Opening diffs and
 descriptions in Ghostty tabs needs Ghostty 1.3+ (AppleScript); the first such

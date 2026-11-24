@@ -2,5 +2,6 @@
 # Usage: ghd start
 cd $HOME
 lib=${0:A:h}
-exec env -u TMUX tmux -L ghd -f $lib/tmux.conf \
-  new-session -A -s ghd -n dashboard env "TERM_PROGRAM=$TERM_PROGRAM" $lib/dash
+exec env -u TMUX tmux -L ghd-$$ -f $lib/tmux.conf \
+  new-session -s ghd -n dashboard env "TERM_PROGRAM=$TERM_PROGRAM" $lib/dash \; \
+  set-option destroy-unattached on

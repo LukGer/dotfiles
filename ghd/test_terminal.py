@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import fcntl
 import json
 import os
@@ -9,6 +10,7 @@ import signal
 import struct
 import subprocess
 import sys
+import tempfile
 import termios
 import time
 import uuid
@@ -21,6 +23,12 @@ LIB = Path(__file__).resolve().parent
 
 @pytest.fixture
 def terminal(tmp_path):
+    with open_terminal(tmp_path) as session:
+        yield session
+
+
+@contextmanager
+def open_terminal(tmp_path):
     master, slave = pty.openpty()
 
     def settings():
@@ -59,14 +67,49 @@ def terminal(tmp_path):
     def send(key):
         os.write(master, key)
 
-    yield start, expect, send, resize
-    for process in processes:
-        if process.poll() is None:
-            process.kill()
-        process.wait(timeout=3)
-    assert settings() == original, "terminal settings were not restored"
-    os.close(master)
-    os.close(slave)
+    try:
+        yield start, expect, send, resize
+    finally:
+        for process in processes:
+            if process.poll() is None:
+                process.terminate()
+            process.wait(timeout=3)
+        assert settings() == original, "terminal settings were not restored"
+        os.close(master)
+        os.close(slave)
+
+
+@pytest.mark.skipif(not shutil.which("tmux"), reason="needs tmux")
+def test_second_dashboard_opens_while_first_shows_a_review(tmp_path, terminal):
+    for filename in ("start", "tmux.conf"):
+        shutil.copy(LIB / filename, tmp_path)
+    dash = tmp_path / "dash"
+    dash.write_text('#!/bin/sh\nprintf "Dashboard %s\\n" "$TERM_PROGRAM"\nread -r key\nprintf "Review running\\n"\nread -r key\n')
+    dash.chmod(0o755)
+    start, expect, send, _ = terminal
+
+    with tempfile.TemporaryDirectory(prefix="ghd-", dir="/tmp") as socket_dir:
+        try:
+            first = start([str(tmp_path / "start")], TMUX_TMPDIR=socket_dir, TERM_PROGRAM="first")
+            expect(b"Dashboard first")
+            send(b"\r")
+            expect(b"Review running")
+
+            with open_terminal(tmp_path) as (start_second, expect_second, send_second, _):
+                second = start_second([str(tmp_path / "start")], TMUX_TMPDIR=socket_dir, TERM_PROGRAM="second")
+                assert b"Review running" not in expect_second(b"Dashboard second")
+                send_second(b"\x02d")  # Detach with tmux's default prefix.
+                assert second.wait(timeout=3) == 0
+                active = subprocess.run(["tmux", "-L", f"ghd-{second.pid}", "has-session"],
+                                        env={**os.environ, "TMUX_TMPDIR": socket_dir}, capture_output=True, timeout=3)
+                assert active.returncode != 0, "detaching left the second dashboard running"
+
+            assert first.poll() is None
+            send(b"\r")
+            assert first.wait(timeout=3) == 0
+        finally:
+            for socket in Path(socket_dir).glob("tmux-*/*"):
+                subprocess.run(["tmux", "-S", str(socket), "kill-server"], capture_output=True, timeout=3)
 
 
 @pytest.fixture
