@@ -144,16 +144,21 @@ func TestPostAsksHowToPost(t *testing.T) {
 }
 
 func TestPostStaysInTheReviewScreen(t *testing.T) {
-	for _, fail := range []bool{false, true} {
-		t.Run(fmt.Sprint(fail), func(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		posted  string
+		skipped string
+		fail    bool
+	}{
+		{"posted", "[1]", "[]", false},
+		{"skipped", "[]", "[1]", false},
+		{"failed", "[]", "[]", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			m := savedReview(t, Meta{Repo: "o/r", PR: 7}, []Finding{{Severity: "P1", Category: "bug"}})
 			m.lib = t.TempDir()
-			positions := "[1]"
-			if fail {
-				positions = "[]"
-			}
-			script := "import sys\nassert sys.stdin.read() == ''\nprint('{\"message\": \"Result from Python\", \"posted\": " + positions + "}')\n"
-			if fail {
+			script := fmt.Sprintf("import sys\nassert sys.stdin.read() == ''\nprint('{\"message\": \"Result from Python\", \"posted\": %s, \"skipped\": %s}')\n", tc.posted, tc.skipped)
+			if tc.fail {
 				script += "sys.exit(1)\n"
 			}
 			os.WriteFile(filepath.Join(m.lib, "post.py"), []byte(script), 0o600)
@@ -169,7 +174,7 @@ func TestPostStaysInTheReviewScreen(t *testing.T) {
 			if !strings.Contains(m.View(), "Result from Python") {
 				t.Fatalf("post result is missing: %s", m.View())
 			}
-			if got := Picks(m.selected); (got != "") != fail {
+			if got := Picks(m.selected); (got != "") != tc.fail {
 				t.Fatalf("selection after posting: %q", got)
 			}
 			m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -186,7 +191,7 @@ func TestPartialPostKeepsOnlyUnpostedFindingsSelected(t *testing.T) {
 		{Severity: "P1", Category: "bug"},
 		{Severity: "P1", Category: "bug"},
 	})
-	m.Update(postDoneMsg{output: "One thread failed", posted: []int{1, 3}, err: fmt.Errorf("exit status 1")})
+	m.Update(postDoneMsg{output: "One thread failed", handled: []int{1, 3}, err: fmt.Errorf("exit status 1")})
 	if got := Picks(m.selected); got != "2" {
 		t.Fatalf("partial post left %q selected", got)
 	}

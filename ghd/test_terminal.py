@@ -138,7 +138,8 @@ if name == 'gh':
             print(json.dumps({'data': {'addPullRequestReview': {'pullRequestReview': {'id': 'review'}}, 'addPullRequestReviewThread': {'thread': {'id': 'thread'}}}}))
             sys.exit(0)
         print(json.dumps({'data': {'repository': {'pullRequest': {
-            'id': 'pr', 'headRefOid': 'abc', 'reviews': {'nodes': []}
+            'id': 'pr', 'headRefOid': 'abc', 'reviews': {'nodes': []},
+            'reviewThreads': {'nodes': [], 'pageInfo': {'hasNextPage': False}}
         }}}}))
     else:
         print(json.dumps({'filename': 'f.py', 'patch': '@@ -1 +1 @@\\n+code'}))

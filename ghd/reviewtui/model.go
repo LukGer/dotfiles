@@ -54,9 +54,9 @@ type (
 	}
 	actionDoneMsg struct{ err error }
 	postDoneMsg   struct {
-		output string
-		posted []int
-		err    error
+		output  string
+		handled []int
+		err     error
 	}
 )
 
@@ -253,7 +253,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.postOutput += "\n\nPosting failed: " + msg.err.Error()
 		}
-		for _, position := range msg.posted {
+		for _, position := range msg.handled {
 			m.selected[position-1] = false
 		}
 		m.renderPostResult()
@@ -417,6 +417,7 @@ func (m *model) post(event, message string) tea.Cmd {
 		var report struct {
 			Message string `json:"message"`
 			Posted  []int  `json:"posted"`
+			Skipped []int  `json:"skipped"`
 		}
 		if decodeErr := json.Unmarshal(output, &report); decodeErr != nil {
 			if err == nil {
@@ -424,7 +425,7 @@ func (m *model) post(event, message string) tea.Cmd {
 			}
 			return postDoneMsg{output: string(output), err: err}
 		}
-		return postDoneMsg{report.Message, report.Posted, err}
+		return postDoneMsg{output: report.Message, handled: append(report.Posted, report.Skipped...), err: err}
 	}
 }
 

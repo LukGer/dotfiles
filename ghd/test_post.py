@@ -24,6 +24,60 @@ PATCH = "\n".join([
     "\\ No newline at end of file",
 ])
 DIFF = {"f.ts": post.parse_patch(PATCH)}
+NO_THREADS = {"nodes": [], "pageInfo": {"hasNextPage": False}}
+
+
+@pytest.mark.parametrize("resolved, viewer, current_line, original, lines, expected", [
+    (True, True, 2, (2, "abc"), [2], []),
+    (False, True, 2, (2, "abc"), [2, 3], [3]),
+    (True, True, None, (2, "abc"), [2], []),
+    (True, False, 2, (2, "abc"), [2], [2]),
+    (True, True, 3, (3, "abc"), [2], [2]),
+    (True, True, 3, (2, "old"), [2], [2]),
+    (True, True, 2, (3, "old"), [2], []),
+])
+def test_post_checks_existing_review_threads(tmp_path, monkeypatch, capsys, resolved, viewer,
+                                             current_line, original, lines, expected):
+    path = tmp_path / "review.findings"
+    path.write_text(json.dumps({"tldr": "Summary", "findings": [
+        {"file": "f.ts", "line": line, "severity": "P1", "category": "bug", "comment": "Fix this."}
+        for line in lines
+    ]}))
+    monkeypatch.setattr(post, "pick_review", lambda *args: (str(path), {"sha": "abc"}))
+    monkeypatch.setattr(post, "diff_files", lambda *args: DIFF)
+    mutations = []
+    url = "https://github.com/owner/repo/pull/42#discussion_r123"
+
+    def graphql(query, **variables):
+        if query == post.PR_QUERY:
+            if variables.get("after") == "next-page":
+                threads = {"pageInfo": {"hasNextPage": False}, "nodes": [{
+                    "path": "f.ts", "line": current_line, "originalLine": original[0],
+                    "subjectType": "LINE", "diffSide": "RIGHT", "isResolved": resolved,
+                    "comments": {"nodes": [{
+                        "viewerDidAuthor": viewer, "url": url, "body": "[P1] 🐛 Fix this.\n\n(added by AI)",
+                        "originalCommit": {"oid": original[1]},
+                    }]},
+                }]}
+            else:
+                threads = {"nodes": [], "pageInfo": {"hasNextPage": True, "endCursor": "next-page"}}
+            return {"repository": {"pullRequest": {
+                "id": "pr", "headRefOid": "abc", "reviews": {"nodes": []}, "reviewThreads": threads,
+            }}}
+        mutations.append((query, variables["input"]))
+        return {"addPullRequestReview": {"pullRequestReview": {"id": "new"}}}
+
+    monkeypatch.setattr(post, "graphql", graphql)
+    post.main(["owner/repo", "42", "--review", str(path), "--pick", "1,2", "--json"])
+
+    assert [payload["line"] for query, payload in mutations if query == post.ADD_THREAD] == expected
+    assert bool(mutations) == bool(expected)
+    report = json.loads(capsys.readouterr().out)
+    skipped = 2 not in expected
+    assert report.get("skipped", []) == ([1] if skipped else [])
+    if skipped:
+        assert ("Resolved" if resolved else "Already posted") in report["message"]
+        assert url in report["message"]
 
 
 @pytest.mark.parametrize("pending", [False, True])
@@ -40,7 +94,7 @@ def test_selected_findings_post_without_reading_terminal_input(tmp_path, monkeyp
     def graphql(query, **variables):
         if query == post.PR_QUERY:
             return {"repository": {"pullRequest": {
-                "id": "pr", "headRefOid": "abc",
+                "id": "pr", "headRefOid": "abc", "reviewThreads": NO_THREADS,
                 "reviews": {"nodes": [{"id": "existing", "body": ""}] if pending else []},
             }}}
         mutations.append((query, variables["input"]))
@@ -75,7 +129,7 @@ def test_post_report_identifies_only_posted_findings(tmp_path, monkeypatch, caps
     def graphql(query, **variables):
         if query == post.PR_QUERY:
             return {"repository": {"pullRequest": {
-                "id": "pr", "headRefOid": "new",
+                "id": "pr", "headRefOid": "new", "reviewThreads": NO_THREADS,
                 "reviews": {"nodes": [{"id": "existing", "body": ""}] if pending else []},
             }}}
         mutations.append(query)
@@ -126,7 +180,7 @@ def test_post_submits_the_review_with_the_chosen_event(tmp_path, monkeypatch, ca
     def graphql(query, **variables):
         if query == post.PR_QUERY:
             return {"repository": {"pullRequest": {
-                "id": "pr", "headRefOid": "abc",
+                "id": "pr", "headRefOid": "abc", "reviewThreads": NO_THREADS,
                 "reviews": {"nodes": [] if pending is None else [{"id": "existing", "body": pending}]},
             }}}
         if query == fail:

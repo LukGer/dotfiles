@@ -103,9 +103,16 @@ def graphql(query: str, **variables) -> dict:
     return out["data"]
 
 
-PR_QUERY = """query($owner: String!, $name: String!, $number: Int!) {
+PR_QUERY = """query($owner: String!, $name: String!, $number: Int!, $after: String) {
   repository(owner: $owner, name: $name) { pullRequest(number: $number) {
-    id headRefOid reviews(states: PENDING, first: 1) { nodes { id } } } } }"""
+    id headRefOid reviews(states: PENDING, first: 1) { nodes { id } }
+    reviewThreads(first: 100, after: $after) {
+      pageInfo { hasNextPage endCursor }
+      nodes { path subjectType diffSide line originalLine isResolved
+        comments(first: 1) { nodes { viewerDidAuthor body url originalCommit { oid } } }
+      }
+    }
+  } } }"""
 CREATE_REVIEW = """mutation($input: AddPullRequestReviewInput!) {
   addPullRequestReview(input: $input) { pullRequestReview { id } } }"""
 ADD_THREAD = """mutation($input: AddPullRequestReviewThreadInput!) {
@@ -113,6 +120,42 @@ ADD_THREAD = """mutation($input: AddPullRequestReviewThreadInput!) {
 SUBMIT_REVIEW = """mutation($input: SubmitPullRequestReviewInput!) {
   submitPullRequestReview(input: $input) { pullRequestReview { id } } }"""
 SUBMITTED = {"COMMENT": "review posted", "APPROVE": "review approved"}
+
+
+def pull_request_with_threads(repo: str, pr: str) -> tuple[dict, list[dict]]:
+    owner, name = repo.split("/")
+    variables = {"owner": owner, "name": name, "number": int(pr)}
+    pull = graphql(PR_QUERY, **variables)["repository"]["pullRequest"]
+    page = pull["reviewThreads"]
+    threads = list(page["nodes"])
+    while page["pageInfo"]["hasNextPage"]:
+        data = graphql(PR_QUERY, **variables, after=page["pageInfo"]["endCursor"])
+        page = data["repository"]["pullRequest"]["reviewThreads"]
+        threads.extend(page["nodes"])
+    return pull, threads
+
+
+def existing_comment(finding: dict, review_sha: str, threads: list[dict]) -> str | None:
+    body = comment_text(finding).strip()
+    placement = finding["placement"]
+    for thread in threads:
+        if thread["path"] != finding["file"]:
+            continue
+        roots = thread["comments"]["nodes"]
+        if not roots:
+            continue
+        root = roots[0]
+        if not root["viewerDidAuthor"] or root["body"].strip() != body:
+            continue
+        if thread["subjectType"] != "FILE":
+            original_commit = root["originalCommit"]
+            original_match = original_commit and original_commit["oid"] == review_sha and thread["originalLine"] == finding["line"]
+            current_match = placement["kind"] == "line" and thread["line"] == placement["line"]
+            if thread["diffSide"] != "RIGHT" or not (original_match or current_match):
+                continue
+        status = "Resolved" if thread["isResolved"] else "Already posted"
+        return f"{status}: {finding['file']}:{finding['line']} {root['url']}"
+    return None
 
 
 def thread_input(finding: dict) -> dict:
@@ -162,6 +205,10 @@ def picked_by_number(findings: list[dict], pick: str) -> list[dict]:
     return [findings[n - 1] for n in numbers if 0 < n <= len(findings)]
 
 
+def finding_positions(findings: list[dict], included: list[dict]) -> list[int]:
+    return [i + 1 for i, f in enumerate(findings) if any(f is item for item in included)]
+
+
 def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("repo")
@@ -175,8 +222,9 @@ def main(argv: list[str]) -> None:
     args = parser.parse_args(argv)
     repo, pr, dry = args.repo, args.pr, args.dry
 
-    def report(message: str, posted: list[int] | None = None) -> None:
-        print(json.dumps({"message": message, "posted": posted or []}, ensure_ascii=False) if args.json else message)
+    def report(message: str, posted: list[int] | None = None, skipped: list[int] | None = None) -> None:
+        print(json.dumps({"message": message, "posted": posted or [], "skipped": skipped or []},
+                         ensure_ascii=False) if args.json else message)
 
     show_message = pause if args.pick is None else report
 
@@ -198,19 +246,24 @@ def main(argv: list[str]) -> None:
     if not chosen:
         return report("Nothing selected.")
 
-    owner, name = repo.split("/")
-    pull = graphql(PR_QUERY, owner=owner, name=name, number=int(pr))["repository"]["pullRequest"]
+    pull, existing_threads = pull_request_with_threads(repo, pr)
     pending = (pull["reviews"]["nodes"] or [None])[0]
     diff = diff_files(repo, pr)
-    for f in findings:
+    fresh, duplicates, notes = [], [], []
+    for f in chosen:
         f["placement"] = place(f, diff)
+        if match := existing_comment(f, meta["sha"], existing_threads):
+            duplicates.append(f)
+            notes.append(match)
+        else:
+            fresh.append(f)
+    skipped = finding_positions(findings, duplicates)
 
-    threads = [f for f in chosen if f["placement"]["kind"] != "body"]
-    folded = [f for f in chosen if f["placement"]["kind"] == "body"]
-    tldr = data.get("tldr", "") if args.event is None else ""
+    threads = [f for f in fresh if f["placement"]["kind"] != "body"]
+    folded = [f for f in fresh if f["placement"]["kind"] == "body"]
+    tldr = data.get("tldr", "") if fresh and args.event is None else ""
     body = "" if pending else review_body(tldr, folded)
 
-    notes = []
     if pull["headRefOid"] != meta["sha"]:
         notes.append(f"The PR has new commits since the review ({meta['sha'][:7]} -> {pull['headRefOid'][:7]}). Lines were re-placed by anchor.")
     if pending and folded:
@@ -223,12 +276,13 @@ def main(argv: list[str]) -> None:
 
     submit_body = "\n\n".join(filter(None, [args.message.strip(), body]))
     if not threads and not body and args.event != "APPROVE":
-        return report("\n".join(["Nothing to post.", *notes]))
+        return report("\n".join(["Nothing to post.", *notes]), skipped=skipped)
     if dry:
         payload = {"review": None if pending else {"pullRequestId": pull["id"], "commitOID": pull["headRefOid"], "body": body},
                    "threads": [thread_input(f) for f in threads],
                    "submit": {"event": args.event, "body": submit_body} if args.event else None}
-        return report("\n".join(["Dry run: nothing posted.", json.dumps(payload, indent=2, ensure_ascii=False), *notes]))
+        return report("\n".join(["Dry run: nothing posted.", json.dumps(payload, indent=2, ensure_ascii=False), *notes]),
+                      skipped=skipped)
 
     review_id = pending["id"] if pending else graphql(CREATE_REVIEW, input={
         "pullRequestId": pull["id"], "commitOID": pull["headRefOid"], "body": body,
@@ -241,7 +295,7 @@ def main(argv: list[str]) -> None:
         except RuntimeError as error:
             failed.append(f"{f['file']}:{f['line']} {error}")
     included = [*posted, *([] if pending else folded)]
-    positions = [i + 1 for i, f in enumerate(findings) if any(f is item for item in included)]
+    positions = finding_positions(findings, included)
     url = f"https://github.com/{repo}/pull/{pr}"
     submitted = False
     if args.event and not failed:
@@ -255,7 +309,7 @@ def main(argv: list[str]) -> None:
     else:
         left = " Something failed, so it was left pending." if args.event else ""
         summary = f"{len(posted)} comment(s) added to your pending review.{left} Submit it at {url}/files"
-    report("\n\n".join([summary, *notes, *(["Failed:", *failed] if failed else [])]), positions)
+    report("\n\n".join([summary, *notes, *(["Failed:", *failed] if failed else [])]), positions, skipped)
     if failed:
         raise SystemExit(1)
 

@@ -264,9 +264,13 @@ To save an additional review from a separate agent conversation, use
 2. Each line is checked against the live PR diff and moved by its anchor text
    when the PR changed. A finding that cannot be placed becomes a whole-file
    comment, or a line in the review body when its file is not in the diff.
-3. Press `p` and choose how to post. Comments lead with severity, e.g. `[P1] 🐛 <comment>`,
-   with `nit:` on P3s, and end with `(added by AI)`. Findings folded into the
-   review body also lead with severity.
+3. Press `p` and choose how to post. Before writing to GitHub, ghd checks your
+   existing review threads for the same comment at the same location. The
+   posting result links to any matching open or resolved thread, and the
+   matching findings are skipped and unticked.
+   Comments lead with severity, e.g. `[P1] 🐛 <comment>`, with `nit:` on P3s,
+   and end with `(added by AI)`. Findings folded into the review body also
+   lead with severity.
 4. "Add to my pending review" puts the agent's TLDR in a new draft or keeps
    the existing draft body. You submit the review on GitHub. "Post as review
    comments" and "Approve with a message" submit it (`--event COMMENT|APPROVE
@@ -281,8 +285,8 @@ review screen supplies both. `--dry` shows the payload without posting.
 
 Saved-review and deployment pickers, previews, filtering (`/`), clipboard
 copying (`ctrl+y` in history), and message screens all run in Bubble Tea.
-Python handles fetching and posting data. `--json` returns a posting report
-with its message and the 1-based positions that were successfully posted.
+Python handles fetching and posting data. `--json` returns the message and
+the 1-based finding positions that were posted or skipped as duplicates.
 
 ## Files
 
