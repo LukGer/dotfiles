@@ -27,6 +27,61 @@ DIFF = {"f.ts": post.parse_patch(PATCH)}
 NO_THREADS = {"nodes": [], "pageInfo": {"hasNextPage": False}}
 
 
+@pytest.mark.parametrize("read_errors, create_error, expected_error, attempts", [
+    (["internal"], None, None, (2, 1)),
+    (["internal", "internal"], None, "Checking existing GitHub review threads", (2, 0)),
+    (["forbidden"], None, "Checking existing GitHub review threads", (1, 0)),
+    ([], "internal", "Creating the pending GitHub review", (1, 1)),
+])
+def test_post_retries_only_transient_review_reads(
+    tmp_path, monkeypatch, capsys, read_errors, create_error, expected_error, attempts,
+):
+    path = tmp_path / "review.findings"
+    path.write_text(json.dumps({"findings": [{
+        "file": "f.ts", "line": 2, "severity": "P1", "category": "bug", "comment": "Fix this.",
+    }]}))
+    monkeypatch.setattr(post, "pick_review", lambda *args: (str(path), {"sha": "abc"}))
+    errors = {
+        "internal": "gh: Something went wrong while executing your query. Request ID: test-id",
+        "forbidden": "gh: Resource not accessible by integration",
+    }
+    responses = iter(read_errors)
+    reads = creates = 0
+
+    def gh(*args, payload=None):
+        nonlocal reads, creates
+        if payload is None:
+            return json.dumps({"filename": "f.ts", "patch": PATCH})
+        query = payload["query"]
+        if query.startswith("query"):
+            reads += 1
+            if error := next(responses, None):
+                raise RuntimeError(errors[error])
+            data = {"repository": {"pullRequest": {
+                "id": "pr", "headRefOid": "abc", "reviews": {"nodes": []}, "reviewThreads": NO_THREADS,
+            }}}
+        elif "addPullRequestReview(" in query:
+            creates += 1
+            if create_error:
+                raise RuntimeError(errors[create_error])
+            data = {"addPullRequestReview": {"pullRequestReview": {"id": "new"}}}
+        else:
+            data = {"addPullRequestReviewThread": {"thread": {"id": "posted"}}}
+        return json.dumps({"data": data})
+
+    monkeypatch.setattr(post, "gh", gh)
+    monkeypatch.setattr(post, "sleep", lambda seconds: None)
+    args = ["owner/repo", "42", "--review", str(path), "--pick", "1", "--json"]
+    if expected_error:
+        with pytest.raises(RuntimeError, match=expected_error) as caught:
+            post.main(args)
+        assert errors[create_error or read_errors[-1]] in str(caught.value)
+    else:
+        post.main(args)
+        assert json.loads(capsys.readouterr().out)["posted"] == [1]
+    assert (reads, creates) == attempts
+
+
 @pytest.mark.parametrize("resolved, viewer, current_line, original, lines, expected", [
     (True, True, 2, (2, "abc"), [2], []),
     (False, True, 2, (2, "abc"), [2, 3], [3]),

@@ -17,6 +17,7 @@ import os
 import re
 import subprocess
 import sys
+from time import sleep
 
 from ui import choose, pause, reviewer, review_screen
 
@@ -97,10 +98,19 @@ def gh(*args: str, payload: dict | None = None) -> str:
 
 
 def graphql(query: str, **variables) -> dict:
-    out = json.loads(gh("api", "graphql", "--input", "-", payload={"query": query, "variables": variables}))
-    if out.get("errors"):
-        raise RuntimeError("; ".join(e["message"] for e in out["errors"]))
-    return out["data"]
+    payload = {"query": query, "variables": variables}
+    retry = query.startswith("query")
+    while True:
+        try:
+            out = json.loads(gh("api", "graphql", "--input", "-", payload=payload))
+            if out.get("errors"):
+                raise RuntimeError("; ".join(e["message"] for e in out["errors"]))
+            return out["data"]
+        except RuntimeError as error:
+            if not retry or "Something went wrong while executing your query" not in str(error):
+                raise
+            retry = False
+            sleep(1)
 
 
 PR_QUERY = """query($owner: String!, $name: String!, $number: Int!, $after: String) {
@@ -247,9 +257,15 @@ def main(argv: list[str]) -> None:
     if not chosen:
         return report("Nothing selected.")
 
-    pull, existing_threads = pull_request_with_threads(repo, pr)
+    try:
+        pull, existing_threads = pull_request_with_threads(repo, pr)
+    except RuntimeError as error:
+        raise RuntimeError(f"Checking existing GitHub review threads failed: {error}") from error
     pending = (pull["reviews"]["nodes"] or [None])[0]
-    diff = diff_files(repo, pr)
+    try:
+        diff = diff_files(repo, pr)
+    except RuntimeError as error:
+        raise RuntimeError(f"Fetching the GitHub PR diff failed: {error}") from error
     fresh, duplicates, notes = [], [], []
     for f in chosen:
         f["placement"] = place(f, diff)
@@ -285,9 +301,15 @@ def main(argv: list[str]) -> None:
         return report("\n".join(["Dry run: nothing posted.", json.dumps(payload, indent=2, ensure_ascii=False), *notes]),
                       skipped=skipped)
 
-    review_id = pending["id"] if pending else graphql(CREATE_REVIEW, input={
-        "pullRequestId": pull["id"], "commitOID": pull["headRefOid"], "body": body,
-    })["addPullRequestReview"]["pullRequestReview"]["id"]
+    if pending:
+        review_id = pending["id"]
+    else:
+        try:
+            review_id = graphql(CREATE_REVIEW, input={
+                "pullRequestId": pull["id"], "commitOID": pull["headRefOid"], "body": body,
+            })["addPullRequestReview"]["pullRequestReview"]["id"]
+        except RuntimeError as error:
+            raise RuntimeError(f"Creating the pending GitHub review failed: {error}") from error
     failed, posted = [], []
     for f in threads:
         try:
