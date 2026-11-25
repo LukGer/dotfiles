@@ -61,8 +61,6 @@ type (
 	}
 )
 
-type soundTestDoneMsg struct{ err error }
-
 var (
 	bold    = lipgloss.NewStyle().Bold(true)
 	dim     = lipgloss.NewStyle().Faint(true)
@@ -106,7 +104,6 @@ type model struct {
 	message    textarea.Model
 	files      map[string][][]DiffLine
 	status     string
-	soundTest  bool
 	width      int
 	height     int
 	exitCode   int
@@ -253,12 +250,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.cmd == nil || m.mode == reviewing {
 			m.loadReview()
 		}
-	case soundTestDoneMsg:
-		m.soundTest = false
-		m.status = "Sound test sent"
-		if msg.err != nil {
-			m.status = "Sound test failed: " + msg.err.Error()
-		}
 	case postDoneMsg:
 		m.postOutput = strings.TrimSpace(msg.output)
 		for _, position := range msg.handled {
@@ -379,16 +370,6 @@ func (m *model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case "c":
 			return m, m.resume()
-		case "t":
-			if !m.soundTest {
-				m.soundTest = true
-				m.status = "Sound test in 2 seconds · switch tabs to test in background"
-				return m, func() tea.Msg {
-					cmd := exec.Command(filepath.Join(m.lib, "notify"), "test")
-					cmd.Stdout = os.Stdout
-					return soundTestDoneMsg{err: cmd.Run()}
-				}
-			}
 		default:
 			m.detail, _ = m.detail.Update(msg)
 		}
@@ -715,7 +696,7 @@ func (m *model) reviewView(header string) string {
 	info := fmt.Sprintf("%s %s  ·  %s  ·  %d of %d selected", m.meta.Tool, m.meta.Model, shortSHA(m.meta.SHA), m.picked(), len(m.review.Findings))
 	left := lipgloss.NewStyle().Width(m.listWidth()).Height(m.detail.Height).Render(strings.Join(rows, "\n"))
 	right := paneView(m.detail)
-	keys := "q close · p post · t test sound · pgup/dn · space select · a/n all/none · e edit · c continue · tab view"
+	keys := "q close · pgup/dn scroll · space select · a/n all/none · e edit · p post · c continue · tab review/finding"
 	footer := dim.Render(keys)
 	if m.status != "" {
 		footer = warn.Render(m.status) + "  " + footer

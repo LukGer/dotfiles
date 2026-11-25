@@ -183,15 +183,6 @@ elif name == 'glow':
 
             assert b"nothing selected" not in output, "queued typing chose to post"
             assert menu.poll() is None, "posting should remain a user choice"
-            expect(b"t test sound", "the review screen did not offer a sound test")
-            output = b""
-            os.write(master, b"t")
-            expect(b"Sound test sent", "the sound test did not finish")
-            if terminal == "rex":
-                assert b"\x1b]7501;state=idle:app=ghd:" in output
-                assert b"\x1b]7501;state=done:app=ghd:" in output
-            else:
-                assert b"\a" in output, "the sound test bell did not reach the outer terminal"
             os.write(master, b"\t")
             expect(b"REVIEW-READY", "tab did not show the review text")
             os.write(master, b"\t")
