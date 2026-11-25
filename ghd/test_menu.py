@@ -147,7 +147,7 @@ elif name == 'glow':
                 if select.select([master], [], [], .05)[0]:
                     output += os.read(master, 65536)
             if terminal == "rex":
-                assert b"\x1b]7501;state=working:id=ghd-review:app=ghd:" in output, "Working status did not reach Rex"
+                assert b"\x1b]7501;state=working:app=ghd:" in output, "Working status did not reach Rex"
             os.write(master, b"ignored-input\np\n")
             if select.select([master], [], [], .1)[0]:
                 output += os.read(master, 65536)
@@ -159,7 +159,7 @@ elif name == 'glow':
                     assert time.monotonic() < deadline, f"failure did not reach the review launcher: {output[-800:]!r}"
                     if select.select([master], [], [], .05)[0]:
                         output += os.read(master, 65536)
-                assert output.count(b"\x1b]7501;state=error:id=ghd-review:app=ghd:") == 1
+                assert output.count(b"\x1b]7501;state=error:app=ghd:") == 1
                 os.write(master, b"q")
                 menu.communicate(timeout=5)
                 return
@@ -169,7 +169,7 @@ elif name == 'glow':
                 if select.select([master], [], [], .05)[0]:
                     output += os.read(master, 65536)
             if terminal == "rex":
-                assert b"\x1b]7501;state=done:id=ghd-review:app=ghd:" in output, "Done status did not reach Rex"
+                assert b"\x1b]7501;state=done:app=ghd:" in output, "Done status did not reach Rex"
             else:
                 assert b"\a" in output, "completion bell did not reach the outer terminal"
 

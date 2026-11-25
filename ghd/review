@@ -46,7 +46,7 @@ fi
 notify() {
   local state=$1 message=$2 terminal alert=$'\a'
   if (( rex_activity )); then
-    printf -v alert '\e]7501;state=%s:id=ghd-review:app=ghd:msg=%s\e\\' \
+    printf -v alert '\e]7501;state=%s:app=ghd:msg=%s\e\\' \
       "$state" "$(printf '%s' "$message" | base64 | tr -d '\n')"
   elif [[ $state == working ]]; then
     return
