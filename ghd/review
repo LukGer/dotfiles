@@ -38,34 +38,13 @@ if [[ -z $tool ]]; then
   exit 0
 fi
 
-rex_activity=0
-if [[ $TERM_PROGRAM == rex || ( $TERM_PROGRAM == tmux && -n $REX_BLOCK ) ]]; then
-  rex_activity=1
-fi
-
-notify() {
-  local state=$1 message=$2 terminal alert=$'\a'
-  if (( rex_activity )); then
-    printf -v alert '\e]7501;state=%s:app=ghd:msg=%s\e\\' \
-      "$state" "$(printf '%s' "$message" | base64 | tr -d '\n')"
-  elif [[ $state == working ]]; then
-    return
-  fi
-  [[ -n $TMUX ]] && terminal=$(tmux display-message -p '#{client_tty}' 2>/dev/null)
-  if [[ -n $terminal && -w $terminal ]]; then
-    printf '%s' "$alert" > $terminal
-  elif [[ -t 1 || $alert == $'\a' ]]; then
-    printf '%s' "$alert"
-  fi
-}
-
 fail() {
-  notify error "Review failed for $repo#$pr"
+  $lib/notify error "Review failed for $repo#$pr"
   [[ -n $out && ! -s $out.md ]] && rm -f $out.json $out.findings $out.packet.md $out.progress
   print -u2 "$1"; print -u2 'Press any key...'; read -k 1; exit 1
 }
 
-notify working "Reviewing $repo#$pr"
+$lib/notify working "Reviewing $repo#$pr"
 IFS=$'\t' read -r title author head baseRef < <(gh pr view $pr --repo $repo \
   --json title,author,headRefOid,baseRefName -q '[.title, .author.login, .headRefOid, .baseRefName] | @tsv')
 [[ -n $head ]] || fail "Could not load $repo#$pr."
@@ -180,6 +159,8 @@ export GHD_REVIEW=$out
 opencode_args=(run --standalone --format json --agent pr-review --model $model
   --session $session --title "#$pr review" "$brief")
 if [[ -t 1 ]]; then
+  rex_activity=0
+  $lib/notify is-rex && rex_activity=1
   GHD_REVIEW_QUIT_ON_ERROR=$rex_activity $lib/tui $out -- opencode "${opencode_args[@]}"
 else
   python3 $lib/noninteractive.py python3 $lib/opencode.py "${opencode_args[@]}"
@@ -192,5 +173,5 @@ python3 $lib/check.py "${check_args[@]}" || {
   fail "$tool saved invalid findings; kept as $out.findings.invalid."
 }
 jq --argjson seconds $SECONDS '. + {seconds: $seconds}' $out.json > $out.json.tmp && mv $out.json.tmp $out.json
-notify done "Review ready for $repo#$pr"
+$lib/notify done "Review ready for $repo#$pr"
 $lib/view $repo $pr $out.md || fail "The review viewer exited with an error."

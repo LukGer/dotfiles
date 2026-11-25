@@ -253,6 +253,8 @@ In Rex, reviews report Working, Done, and Error through the
 [Program Status Protocol](https://www.superlogical.com/rex/docs/build/program-status).
 Enable Play sounds under Settings → Notifications → Program Activity and Sound
 for Done and Error to hear the corresponding alerts.
+Press `t` in the review screen to send a test completion alert after two seconds.
+You can switch tabs during the delay to test it in the background.
 
 Other terminals receive the standard terminal bell (BEL). Ghostty's
 `bell-features = system` setting plays the macOS alert sound. Inside tmux, alerts
