@@ -25,12 +25,16 @@ def built_review_screen():
 
 @pytest.mark.skipif(any(not shutil.which(name) for name in ("tmux", "glow")),
                     reason="needs tmux and glow")
-@pytest.mark.parametrize("key, instructions, tool, paragraphs, action, response", [
-    (b"\x1b", "", None, 0, None, None), (b"q", "", None, 0, None, None),
-    (b"1", "", "opencode", 1, b"p", b"nothing selected"),
-    (b"2", "quality only, skip gen/", "opencode", 80, b"c", b"CONVERSATION-READY"),
+@pytest.mark.parametrize("key, instructions, tool, paragraphs, action, response, terminal, agent_fails", [
+    (b"\x1b", "", None, 0, None, None, "ghostty", False),
+    (b"q", "", None, 0, None, None, "ghostty", False),
+    (b"1", "", "opencode", 1, b"p", b"nothing selected", "ghostty", False),
+    (b"2", "quality only, skip gen/", "opencode", 80, b"c", b"CONVERSATION-READY", "rex", False),
+    (b"1", "", "opencode", 0, None, None, "rex", True),
 ])
-def test_review_menu_waits_for_selection_before_returning_to_dashboard(tmp_path, key, instructions, tool, paragraphs, action, response):
+def test_review_menu_waits_for_selection_before_returning_to_dashboard(
+    tmp_path, key, instructions, tool, paragraphs, action, response, terminal, agent_fails,
+):
     tmux = ["tmux", "-L", f"ghd-test-{uuid.uuid4().hex}"]
     record = tmp_path / "calls.jsonl"
     stub = tmp_path / "stub"
@@ -47,7 +51,24 @@ if name == 'gh':
     else:
         print('A review\\tauthor\\t1234567890\\tmain')
 elif name == 'git':
-    sys.exit(1)
+    if not os.environ['CHECK_CLEANUP']:
+        sys.exit(1)
+    if 'get-url' in args:
+        print('https://github.com/owner/repo')
+    elif 'worktree' in args:
+        action = args[args.index('worktree') + 1]
+        if action == 'add':
+            pathlib.Path(args[-2]).mkdir(parents=True)
+        elif action == 'move':
+            pathlib.Path(args[-2]).rename(args[-1])
+        elif action == 'remove':
+            gate = pathlib.Path(os.environ['RELEASE_CLEANUP'])
+            deadline = time.monotonic() + 10
+            while not gate.exists():
+                assert time.monotonic() < deadline, 'cleanup was not released'
+                time.sleep(.01)
+            pathlib.Path(args[-1]).rmdir()
+            gate.with_name('cleanup-done').touch()
 elif name == 'opencode':
     if args[0] in ('--session', '--resume'):
         print('CONVERSATION-READY', flush=True)
@@ -57,6 +78,8 @@ elif name == 'opencode':
     while not pathlib.Path(os.environ['RELEASE_AGENT']).exists():
         assert time.monotonic() < deadline, 'agent was never released'
         time.sleep(.01)
+    if os.environ['AGENT_FAIL'] == '1':
+        sys.exit(1)
     for line in args[-1].splitlines():
         if line.startswith(('review_file: ', 'findings_file: ')):
             file = pathlib.Path(line.split(': ', 1)[1])
@@ -74,6 +97,10 @@ elif name == 'glow':
            "CALLS": str(record), "GHD_STORE": str(tmp_path / "reviews"),
            "RELEASE_AGENT": str(tmp_path / "release"),
            "REAL_GLOW": shutil.which("glow"), "REVIEW_PARAGRAPHS": str(paragraphs),
+           "AGENT_FAIL": str(int(agent_fails)),
+           "CHECK_CLEANUP": "1" if tool and not agent_fails else "",
+           "RELEASE_CLEANUP": str(tmp_path / "release-cleanup"),
+           "HOME": str(tmp_path), "XDG_CACHE_HOME": os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache")),
            "PAGER": "less -R", "LESS": "",
            "GHD_CODE_DIR": str(tmp_path / "missing")}
     master, slave = pty.openpty()
@@ -93,7 +120,7 @@ elif name == 'glow':
         menu = subprocess.Popen(
             [str(ROOT / "bin/ghd"), "review", "owner/repo", "42"],
             env={**env, "TMUX": command("display-message", "-p", "#{socket_path},#{pid},0"),
-                 "TERM_PROGRAM": "ghostty"},
+                 "TERM_PROGRAM": terminal},
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         output = b""
@@ -119,17 +146,32 @@ elif name == 'glow':
                 assert time.monotonic() < deadline, "review did not start"
                 if select.select([master], [], [], .05)[0]:
                     output += os.read(master, 65536)
+            if terminal == "rex":
+                assert b"\x1b]7501;state=working:id=ghd-review:app=ghd:" in output, "Working status did not reach Rex"
             os.write(master, b"ignored-input\np\n")
             if select.select([master], [], [], .1)[0]:
                 output += os.read(master, 65536)
             assert b"ignored-input" not in output, "typing was echoed during the review"
             (tmp_path / "release").touch()
+            if agent_fails:
+                deadline = time.monotonic() + 5
+                while b"Press any key" not in output:
+                    assert time.monotonic() < deadline, f"failure did not reach the review launcher: {output[-800:]!r}"
+                    if select.select([master], [], [], .05)[0]:
+                        output += os.read(master, 65536)
+                assert output.count(b"\x1b]7501;state=error:id=ghd-review:app=ghd:") == 1
+                os.write(master, b"q")
+                menu.communicate(timeout=5)
+                return
             deadline = time.monotonic() + 15
             while b"p post" not in output:
                 assert time.monotonic() < deadline, f"the review screen did not open after the review: {output[-800:]!r}"
                 if select.select([master], [], [], .05)[0]:
                     output += os.read(master, 65536)
-            assert b"\a" in output, "completion bell did not reach the outer terminal"
+            if terminal == "rex":
+                assert b"\x1b]7501;state=done:id=ghd-review:app=ghd:" in output, "Done status did not reach Rex"
+            else:
+                assert b"\a" in output, "completion bell did not reach the outer terminal"
 
             def expect(text, failure):
                 nonlocal output
@@ -153,6 +195,13 @@ elif name == 'glow':
         assert menu.returncode == 0, stderr.decode()
         if tool:
             calls = [json.loads(line) for line in record.read_text().splitlines()]
+            checkout = next(Path(args[-2]) for name, *args in calls if name == "git" and "add" in args)
+            assert not checkout.exists(), "saved reviews could still reopen the worktree"
+            (tmp_path / "release-cleanup").touch()
+            deadline = time.monotonic() + 5
+            while not (tmp_path / "cleanup-done").exists():
+                assert time.monotonic() < deadline, "worktree cleanup did not finish after the review closed"
+                time.sleep(.01)
             brief = next(args for name, *args in calls if name == tool)[-1]
             assert ("Instructions from the human" in brief) == bool(instructions)
             assert brief.endswith(instructions)
@@ -160,6 +209,7 @@ elif name == 'glow':
         else:
             assert not record.exists()
     finally:
+        (tmp_path / "release-cleanup").touch()
         subprocess.run([*tmux, "kill-server"], env=env, capture_output=True)
         for process in (menu, client):
             if process and process.poll() is None:

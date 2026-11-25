@@ -222,8 +222,9 @@ def main(argv: list[str]) -> None:
     args = parser.parse_args(argv)
     repo, pr, dry = args.repo, args.pr, args.dry
 
-    def report(message: str, posted: list[int] | None = None, skipped: list[int] | None = None) -> None:
-        print(json.dumps({"message": message, "posted": posted or [], "skipped": skipped or []},
+    def report(message: str, posted: list[int] | None = None, skipped: list[int] | None = None,
+               *, submitted: bool = False) -> None:
+        print(json.dumps({"message": message, "posted": posted or [], "skipped": skipped or [], "submitted": submitted},
                          ensure_ascii=False) if args.json else message)
 
     show_message = pause if args.pick is None else report
@@ -309,7 +310,8 @@ def main(argv: list[str]) -> None:
     else:
         left = " Something failed, so it was left pending." if args.event else ""
         summary = f"{len(posted)} comment(s) added to your pending review.{left} Submit it at {url}/files"
-    report("\n\n".join([summary, *notes, *(["Failed:", *failed] if failed else [])]), positions, skipped)
+    report("\n\n".join([summary, *notes, *(["Failed:", *failed] if failed else [])]), positions, skipped,
+           submitted=submitted)
     if failed:
         raise SystemExit(1)
 

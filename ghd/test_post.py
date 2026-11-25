@@ -204,6 +204,7 @@ def test_post_submits_the_review_with_the_chosen_event(tmp_path, monkeypatch, ca
     assert submits == ([submitted] if submitted else [])
     report = json.loads(capsys.readouterr().out)
     assert summary in report["message"]
+    assert report["submitted"] == bool(submitted)
     assert report["posted"] == ([] if fail == post.ADD_THREAD else [1])
 
 

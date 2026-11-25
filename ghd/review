@@ -38,22 +38,34 @@ if [[ -z $tool ]]; then
   exit 0
 fi
 
-bell() {
-  local terminal
+rex_activity=0
+if [[ $TERM_PROGRAM == rex || ( $TERM_PROGRAM == tmux && -n $REX_BLOCK ) ]]; then
+  rex_activity=1
+fi
+
+notify() {
+  local state=$1 message=$2 terminal alert=$'\a'
+  if (( rex_activity )); then
+    printf -v alert '\e]7501;state=%s:id=ghd-review:app=ghd:msg=%s\e\\' \
+      "$state" "$(printf '%s' "$message" | base64 | tr -d '\n')"
+  elif [[ $state == working ]]; then
+    return
+  fi
   [[ -n $TMUX ]] && terminal=$(tmux display-message -p '#{client_tty}' 2>/dev/null)
   if [[ -n $terminal && -w $terminal ]]; then
-    printf '\a' > $terminal
-  else
-    printf '\a'
+    printf '%s' "$alert" > $terminal
+  elif [[ -t 1 || $alert == $'\a' ]]; then
+    printf '%s' "$alert"
   fi
 }
 
 fail() {
-  bell
+  notify error "Review failed for $repo#$pr"
   [[ -n $out && ! -s $out.md ]] && rm -f $out.json $out.findings $out.packet.md $out.progress
   print -u2 "$1"; print -u2 'Press any key...'; read -k 1; exit 1
 }
 
+notify working "Reviewing $repo#$pr"
 IFS=$'\t' read -r title author head baseRef < <(gh pr view $pr --repo $repo \
   --json title,author,headRefOid,baseRefName -q '[.title, .author.login, .headRefOid, .baseRefName] | @tsv')
 [[ -n $head ]] || fail "Could not load $repo#$pr."
@@ -78,6 +90,22 @@ out=$store/$(date +%Y%m%d-%H%M%S)__${repo//\//_}__${pr}__${tool}-$review_id
 
 clone=${GHD_CODE_DIR:-$HOME/dev}/${repo#*/}
 worktree=$HOME/.cache/ghd/${repo#*/}-$pr-${head[1,7]}-$tool-$review_id
+remove_worktree() {
+  local -a remove=(git -C "$clone" worktree remove --force)
+  local cleanup=$worktree-cleanup
+  if [[ -t 1 ]] && git -C "$clone" worktree move -- "$worktree" "$cleanup" 2>/dev/null; then
+    python3 - "${remove[@]}" "$cleanup" <<'PY' || "${remove[@]}" "$cleanup"
+import subprocess
+import sys
+
+subprocess.Popen(sys.argv[1:], start_new_session=True, stdin=subprocess.DEVNULL,
+                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+PY
+  else
+    "${remove[@]}" "$worktree"
+  fi
+}
+
 merge_base=""
 if [[ $(git -C $clone remote get-url origin 2>/dev/null) == *[:/]$repo(.git|) ]]; then
   print '  Fetching the PR into a detached worktree...'
@@ -85,7 +113,7 @@ if [[ $(git -C $clone remote get-url origin 2>/dev/null) == *[:/]$repo(.git|) ]]
     || fail "Could not fetch $repo#$pr into $clone."
   git -C $clone -c core.hooksPath=/dev/null worktree add -q --detach $worktree $head \
     || fail "Could not create $worktree."
-  trap "git -C ${(q)clone} worktree remove --force ${(q)worktree}" EXIT
+  trap remove_worktree EXIT
   merge_base=$(git -C $clone merge-base origin/$baseRef $head)
   cd $worktree
 else
@@ -152,7 +180,7 @@ export GHD_REVIEW=$out
 opencode_args=(run --standalone --format json --agent pr-review --model $model
   --session $session --title "#$pr review" "$brief")
 if [[ -t 1 ]]; then
-  $lib/tui $out -- opencode "${opencode_args[@]}"
+  GHD_REVIEW_QUIT_ON_ERROR=$rex_activity $lib/tui $out -- opencode "${opencode_args[@]}"
 else
   python3 $lib/noninteractive.py python3 $lib/opencode.py "${opencode_args[@]}"
 fi || fail "OpenCode review failed."
@@ -164,5 +192,5 @@ python3 $lib/check.py "${check_args[@]}" || {
   fail "$tool saved invalid findings; kept as $out.findings.invalid."
 }
 jq --argjson seconds $SECONDS '. + {seconds: $seconds}' $out.json > $out.json.tmp && mv $out.json.tmp $out.json
-bell
+notify done "Review ready for $repo#$pr"
 $lib/view $repo $pr $out.md || fail "The review viewer exited with an error."

@@ -223,7 +223,7 @@ reach every specialist verbatim, and appear in the saved metadata and review.
    cost, the phase, each specialist pass as it starts and finishes, findings
    as they are saved, and the streamed transcript with one line per tool
    call; scroll with the arrow keys, `G` follows again, Ctrl+C cancels. Typing
-   never reaches the agent. A bell sounds when the review is saved.
+   never reaches the agent. An alert sounds when the review is saved.
    Off a terminal, `opencode.py` renders V2 JSON text and completed tool calls
    and preserves provider failures. The progress plugin reports live specialist
    activity while calls are running.
@@ -238,19 +238,25 @@ reach every specialist verbatim, and appear in the saved metadata and review.
    back into the findings file, `tab` switches to the full review markdown,
    `p` asks how to post the ticked findings: add them to your pending
    GitHub review, post them as review comments, or approve with a message.
-   Progress and a scrollable result stay in the review screen; Enter returns
-   to the findings. Posted findings are unticked, including after a partial
-   failure, so a retry only includes findings that were not posted.
+   After GitHub accepts the review comments or approval, the review closes
+   automatically. Pending reviews, dry runs, and incomplete submissions show
+   a scrollable result. Enter returns to the findings. Posted findings are
+   unticked after a partial failure so you can retry the remaining findings.
    `c` continues the
    conversation with the reviewer in its worktree (ask about a finding, have
    it explain a fix, or discuss its evidence), and `q` returns to
-   the dashboard. The worktree is removed when the popup closes, so a review
+   the dashboard. Closing the review starts worktree cleanup, so a review
    opened later from `E` can no longer be continued. Saved reviews from `E`
    open in the same screen.
 
-The alert uses the standard terminal bell (BEL). In tmux popups it is sent
-directly to the attached terminal because popup output does not forward bells.
-Ghostty's `bell-features = system` setting plays the macOS alert sound.
+In Rex, reviews report Working, Done, and Error through the
+[Program Status Protocol](https://www.superlogical.com/rex/docs/build/program-status).
+Enable Play sounds under Settings → Notifications → Program Activity and Sound
+for Done and Error to hear the corresponding alerts.
+
+Other terminals receive the standard terminal bell (BEL). Ghostty's
+`bell-features = system` setting plays the macOS alert sound. Inside tmux, alerts
+go directly to the attached terminal.
 
 To save an additional review from a separate agent conversation, use
 `ghd save <repo> <pr> <tool> <markdown file> <findings file>`.

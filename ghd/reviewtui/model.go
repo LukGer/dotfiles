@@ -54,9 +54,10 @@ type (
 	}
 	actionDoneMsg struct{ err error }
 	postDoneMsg   struct {
-		output  string
-		handled []int
-		err     error
+		output    string
+		handled   []int
+		submitted bool
+		err       error
 	}
 )
 
@@ -98,6 +99,7 @@ type model struct {
 	showMD     bool
 	dry        bool
 	postOutput string
+	submitted  bool
 	postCursor int
 	message    textarea.Model
 	files      map[string][][]DiffLine
@@ -147,12 +149,10 @@ func (m *model) Init() tea.Cmd {
 	}
 	stdout, err := m.cmd.StdoutPipe()
 	if err != nil {
-		m.fail(err.Error())
-		return nil
+		return m.fail(err.Error())
 	}
 	if err := m.cmd.Start(); err != nil {
-		m.fail(err.Error())
-		return nil
+		return m.fail(err.Error())
 	}
 	m.lines = make(chan string, 256)
 	go func() {
@@ -178,8 +178,12 @@ func (m *model) nextLine() tea.Cmd {
 	}
 }
 
-func (m *model) fail(reason string) {
+func (m *model) fail(reason string) tea.Cmd {
 	m.mode, m.exitErr, m.exitCode = failed, reason, 1
+	if os.Getenv("GHD_REVIEW_QUIT_ON_ERROR") == "1" {
+		return tea.Quit
+	}
+	return nil
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -215,8 +219,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if tail := strings.TrimSpace(m.stderr.String()); tail != "" {
 				reason += "\n\n" + lastLines(tail, 12)
 			}
-			m.fail(reason)
-			return m, nil
+			return m, m.fail(reason)
 		}
 		return m, tea.Quit
 	case tickMsg:
@@ -248,13 +251,17 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loadReview()
 		}
 	case postDoneMsg:
-		m.mode = postResult
 		m.postOutput = strings.TrimSpace(msg.output)
-		if msg.err != nil {
-			m.postOutput += "\n\nPosting failed: " + msg.err.Error()
-		}
 		for _, position := range msg.handled {
 			m.selected[position-1] = false
+		}
+		if msg.submitted && msg.err == nil && Picks(m.selected) == "" {
+			m.submitted = true
+			return m, tea.Quit
+		}
+		m.mode = postResult
+		if msg.err != nil {
+			m.postOutput += "\n\nPosting failed: " + msg.err.Error()
 		}
 		m.renderPostResult()
 	}
@@ -415,9 +422,10 @@ func (m *model) post(event, message string) tea.Cmd {
 	return func() tea.Msg {
 		output, err := cmd.CombinedOutput()
 		var report struct {
-			Message string `json:"message"`
-			Posted  []int  `json:"posted"`
-			Skipped []int  `json:"skipped"`
+			Message   string `json:"message"`
+			Posted    []int  `json:"posted"`
+			Skipped   []int  `json:"skipped"`
+			Submitted bool   `json:"submitted"`
 		}
 		if decodeErr := json.Unmarshal(output, &report); decodeErr != nil {
 			if err == nil {
@@ -425,7 +433,7 @@ func (m *model) post(event, message string) tea.Cmd {
 			}
 			return postDoneMsg{output: string(output), err: err}
 		}
-		return postDoneMsg{output: report.Message, handled: append(report.Posted, report.Skipped...), err: err}
+		return postDoneMsg{output: report.Message, handled: append(report.Posted, report.Skipped...), submitted: report.Submitted, err: err}
 	}
 }
 

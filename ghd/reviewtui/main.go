@@ -55,5 +55,8 @@ func main() {
 	if m.mode == failed {
 		fmt.Fprintln(os.Stderr, m.exitErr)
 	}
+	if m.submitted {
+		fmt.Println(m.postOutput)
+	}
 	os.Exit(m.exitCode)
 }

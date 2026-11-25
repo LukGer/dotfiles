@@ -158,13 +158,13 @@ def built_screen():
     subprocess.run([str(LIB / "tui")], capture_output=True, timeout=600)
 
 
-@pytest.mark.parametrize("dry, steps, outcome", [
-    (False, [(b"1", None)], b"comment(s) added to your pending review"),
-    (True, [(b"1", None)], b'"threads":'),
-    (False, [(b"2", None)], b"review posted"),
-    (False, [(b"3", b"Approval message"), (b"LGTM", None), (b"\r", None)], b"review approved"),
+@pytest.mark.parametrize("dry, steps, outcome, closes", [
+    (False, [(b"1", None)], b"comment(s) added to your pending review", False),
+    (True, [(b"2", None)], b'"threads":', False),
+    (False, [(b"2", None)], b"review posted", True),
+    (False, [(b"3", b"Approval message"), (b"LGTM", None), (b"\r", None)], b"review approved", True),
 ])
-def test_p_posts_the_chosen_way(terminal, posting, tmp_path, dry, steps, outcome):
+def test_p_posts_the_chosen_way(terminal, posting, tmp_path, dry, steps, outcome, closes):
     start, expect, send, _ = terminal
     process = start([str(LIB / "post.py"), "owner/repo", "42", *(["--dry"] if dry else [])], **posting)
     expect(b"p post")
@@ -174,13 +174,12 @@ def test_p_posts_the_chosen_way(terminal, posting, tmp_path, dry, steps, outcome
         send(key)
         if prompt:
             expect(prompt)
-    output = expect(b"Posting result")
-    assert b"[s] post" not in output
     expect(outcome)
     assert (tmp_path / "posted").exists() != dry
-    send(b"\r")
-    expect(b"p post")
-    send(b"q")
+    if not closes:
+        send(b"\r")
+        expect(b"p post")
+        send(b"q")
     assert process.wait(timeout=3) == 0
 
 
