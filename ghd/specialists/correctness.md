@@ -8,6 +8,7 @@ Find behaviour that is wrong for some reachable input or state. Work hunk by hun
 - Async: unawaited promises, errors swallowed by `.catch` or empty `try`, races between reads and writes, cancellation and timeouts, retries without idempotency.
 - Types and conversions: string versus number ids, truthiness of `0` and `""`, float money, implicit coercion at API edges, enum exhaustiveness after a new member.
 - State: mutation of shared or cached objects, stale closures, ordering assumptions, initialisation before use, cleanup on every exit path.
+- Forms and client data: a cleared field dropped from the request body so the clear never persists, validation stricter than the backend that blocks editing older records, client-side derivations (slugs, previews) that differ from what the server computes, required fields that are disabled in edit mode.
 - Contracts: callers of changed signatures and renamed fields (search for them), serialised shapes that persist or cross a wire, tests that now assert the wrong thing.
 
 Every candidate traces to a concrete failing input or sequence. Suspicions without a path to failure are `dropped` with that reason.

@@ -21,7 +21,7 @@ The brief from `ghd review` names the PR, `base`, `merge_base`, `head`, `review_
 
 When the brief names `packet`, read that file first: `ghd review` gathered the window, PR text, commits, files, Jira keys, existing review threads and the reviewable diff into it, so only gather what it lacks. Lockfiles, generated files and diffs over 100 KB are listed under "Excluded from the diff" instead: generated files are reviewed through their sources (schemas, generator configuration), so read an excluded file only when a finding depends on it. Otherwise gather once for the pinned window: exact changed paths and line counts, `gh pr view <pr> --repo <repo> --json title,body,headRefName`, `git log <merge_base>..<head>`, and the review threads already on the PR (`gh api --method GET repos/<repo>/pulls/<pr>/comments --paginate`). A point that already has a thread is not raised again; it goes in the Dropped table as `already on the PR`. Everything is committed; there is no staged, unstaged, or untracked review window.
 
-When `.agents/skills/local-review/SKILL.md` exists, read its roster, exclusions, and Deep trigger, following its pointers for launch criteria. Apply those exclusions before reading the full reviewable diff. Otherwise read the full PR diff. Repository guidelines define what to inspect; this personal skill owns gathering, dispatch, verification, and output instead of running the repository's orchestration steps.
+When `.agents/skills/local-review/SKILL.md` exists, read its roster, exclusions, and Deep trigger, following its pointers for launch criteria. Also note the file of known verification traps it hands its verifier and the rules it names for writing a finding's problem, when it has them. Apply those exclusions before reading the full reviewable diff. Otherwise read the full PR diff. Repository guidelines define what to inspect; this personal skill owns gathering, dispatch, verification, and output instead of running the repository's orchestration steps.
 
 Build one shared review packet in context:
 
@@ -64,7 +64,7 @@ Without `local-review`, make one pass over the gathered diff for bugs and logic 
 
 ### Verify and consolidate
 
-Consolidate overlapping candidates and remove points already on the PR before verification. When candidates remain, read `verification_guidelines` from the brief and dispatch one fresh batch on `verification_model`. That file owns the verifier contract and token limits. Share the deduplicated candidates, relevant hunks, pinned window, requirements needed for their claims, and the human's instructions; omit the full packet and other reviewers' votes. Use OpenCode’s `ghd-verifier` subagent with the configured model explicitly.
+Consolidate overlapping candidates and remove points already on the PR before verification. When candidates remain, read `verification_guidelines` from the brief and dispatch one fresh batch on `verification_model`. That file owns the verifier contract and token limits. Share the deduplicated candidates, relevant hunks, pinned window, requirements needed for their claims, the repository's traps file when `local-review` names one, and the human's instructions; omit the full packet and other reviewers' votes. Use OpenCode’s `ghd-verifier` subagent with the configured model explicitly.
 
 Retain the verifier's model, verdict and reason in each finding's optional `verification` array. Keep refuted and uncertain candidates inspectable with the evidence; they start unticked. A missing or failed verification becomes `uncertain` with the access/error reason, never a clean bill of health. Use targeted parent reads to resolve concrete questions, rather than repeating the whole review. A clean PR needs no verifier call.
 
@@ -79,7 +79,7 @@ Every finding carries two axes:
 
 ## Step 3 — Write
 
-**Comment.** Each finding's `comment` is what a human reviewer would post: 1–2 short sentences, about 30 words, problem first and then the fix, naming concrete identifiers. Plain prose, unlabeled: `ghd post` adds the category emoji, `nit:` and the AI suffix.
+**Comment.** Each finding's `comment` is what a human reviewer would post: 1–2 short sentences, about 30 words, problem first and then the fix, naming concrete identifiers. Plain prose, unlabeled: `ghd post` adds the category emoji, `nit:` and the AI suffix. When `local-review` names rules for writing a finding's problem, write the problem by them: what goes wrong for whom, in product words, rather than which code construct is involved.
 
 **Placement.** `line` is the line number in the file at `head`, on a line inside a diff hunk, preferring added lines. `start_line` opens a multi-line range in the same hunk. `anchor` is the exact text of `line`. Verify the retained findings' anchors and hunk membership together before saving, using the worktree or pinned-head API contents.
 
