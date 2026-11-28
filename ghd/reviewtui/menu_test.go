@@ -45,6 +45,12 @@ func TestMenuChoices(t *testing.T) {
 			&menuResult{Action: "review", Model: "openai/gpt-6.2-sol#high", Instructions: "a.go only"}},
 		{"esc returns to the list and keeps the draft", []tea.KeyMsg{runes("1"), runes("x"), esc, runes("2"), enter},
 			&menuResult{Action: "review", Model: "claude-agent/opus#high", Instructions: "x"}},
+		{"f switches GPT to its fast model", []tea.KeyMsg{runes("f"), runes("1"), enter},
+			&menuResult{Action: "review", Model: "openai/gpt-6.2-sol-fast#high"}},
+		{"f again switches fast mode off", []tea.KeyMsg{runes("f"), runes("f"), runes("1"), enter},
+			&menuResult{Action: "review", Model: "openai/gpt-6.2-sol#high"}},
+		{"fast mode leaves Opus as it is", []tea.KeyMsg{runes("f"), runes("2"), enter},
+			&menuResult{Action: "review", Model: "claude-agent/opus#high"}},
 		{"past reviews need no instructions", []tea.KeyMsg{runes("3")}, &menuResult{Action: "past"}},
 		{"posting needs no instructions", []tea.KeyMsg{down, down, down, enter}, &menuResult{Action: "post"}},
 		{"q cancels the list", []tea.KeyMsg{runes("q")}, nil},
@@ -80,5 +86,37 @@ func TestMenuShowsTheInstructionsStepForTheChosenModel(t *testing.T) {
 		if !strings.Contains(view, text) {
 			t.Fatalf("instructions step lacks %q:\n%s", text, view)
 		}
+	}
+}
+
+func TestChatMenuOffersFastMode(t *testing.T) {
+	m := newMenuModel()
+	m.items, m.chat = modelItems, true
+	if !press(m, runes("f"), runes("1")) {
+		t.Fatal("choosing a chat model did not quit")
+	}
+	if want := (menuResult{Action: "chat", Model: "openai/gpt-6.2-sol-fast#high"}); *m.result != want {
+		t.Fatalf("got %+v want %+v", m.result, want)
+	}
+}
+
+func TestMenuShowsFastMode(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		keys []tea.KeyMsg
+		want []string
+	}{
+		{"off by default", nil, []string{"f fast mode: off"}},
+		{"on after f, marked on GPT", []tea.KeyMsg{runes("f")}, []string{"f fast mode: on", "high · OpenCode · fast", "no fast mode"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMenuModel()
+			press(m, tc.keys...)
+			for _, text := range tc.want {
+				if !strings.Contains(m.View(), text) {
+					t.Fatalf("view lacks %q:\n%s", text, m.View())
+				}
+			}
+		})
 	}
 }

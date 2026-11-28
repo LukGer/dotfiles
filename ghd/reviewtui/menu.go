@@ -15,18 +15,20 @@ import (
 )
 
 type menuItem struct {
-	label, detail, action, model string
+	label, detail, action, model, fastModel string
 }
 
+// OpenCode's claude-agent provider passes Claude Code only a model and an
+// effort, so Opus has no fast model.
 var modelItems = []menuItem{
-	{"GPT-6.2 Sol", "high · OpenCode", "review", "openai/gpt-6.2-sol#high"},
-	{"Opus (Claude Code)", "high · OpenCode", "review", "claude-agent/opus#high"},
+	{"GPT-6.2 Sol", "high · OpenCode", "review", "openai/gpt-6.2-sol#high", "openai/gpt-6.2-sol-fast#high"},
+	{"Opus (Claude Code)", "high · OpenCode", "review", "claude-agent/opus#high", ""},
 }
 
 var menuItems = append(modelItems, []menuItem{
-	{"Past reviews of this PR", "", "past", ""},
-	{"Post to GitHub", "", "post", ""},
-	{"Chat with PR", "", "chat", ""},
+	{"Past reviews of this PR", "", "past", "", ""},
+	{"Post to GitHub", "", "post", "", ""},
+	{"Chat with PR", "", "chat", "", ""},
 }...)
 
 // menuResult is what `ghd review` reads back from the menu's result file.
@@ -39,6 +41,7 @@ type menuResult struct {
 type menuModel struct {
 	items  []menuItem
 	chat   bool
+	fast   bool
 	cursor int
 	picked *menuItem
 	input  textarea.Model
@@ -82,6 +85,24 @@ func choiceRow(i int, active bool, label string) string {
 	return pointer + number.Render(fmt.Sprint(i+1)) + "  " + style.Render(label)
 }
 
+func (m *menuModel) model(item menuItem) string {
+	if m.fast && item.fastModel != "" {
+		return item.fastModel
+	}
+	return item.model
+}
+
+func (m *menuModel) detail(item menuItem) string {
+	switch {
+	case !m.fast || item.model == "":
+		return item.detail
+	case item.fastModel == "":
+		return item.detail + " · no fast mode"
+	default:
+		return item.detail + " · fast"
+	}
+}
+
 func (m *menuModel) Init() tea.Cmd { return nil }
 
 func (m *menuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -107,6 +128,8 @@ func (m *menuModel) listKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = (m.cursor + 1) % len(m.items)
 	case "enter":
 		return m.choose(m.cursor)
+	case "f":
+		m.fast = !m.fast
 	default:
 		if n, err := strconv.Atoi(key); err == nil && n >= 1 && n <= len(m.items) {
 			return m.choose(n - 1)
@@ -119,7 +142,7 @@ func (m *menuModel) choose(i int) (tea.Model, tea.Cmd) {
 	m.cursor = i
 	item := m.items[i]
 	if m.chat {
-		m.result = &menuResult{Action: "chat", Model: item.model}
+		m.result = &menuResult{Action: "chat", Model: m.model(item)}
 		return m, tea.Quit
 	}
 	if item.action != "review" {
@@ -139,7 +162,7 @@ func (m *menuModel) instructionsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.input.Blur()
 		return m, nil
 	case "enter":
-		m.result = &menuResult{Action: "review", Model: m.picked.model, Instructions: strings.TrimSpace(m.input.Value())}
+		m.result = &menuResult{Action: "review", Model: m.model(*m.picked), Instructions: strings.TrimSpace(m.input.Value())}
 		return m, tea.Quit
 	}
 	var cmd tea.Cmd
@@ -150,7 +173,7 @@ func (m *menuModel) instructionsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *menuModel) View() string {
 	if m.picked != nil {
 		return menuPage.Render(strings.Join([]string{
-			accent.Bold(true).Render(m.picked.label) + dim.Render(" · "+m.picked.detail),
+			accent.Bold(true).Render(m.picked.label) + dim.Render(" · "+m.detail(*m.picked)),
 			bold.Render("Instructions") + dim.Render(" for this review (optional)"),
 			inputBox.Render(m.input.View()),
 			dim.Render("enter start review · alt+enter newline · esc back"),
@@ -172,11 +195,12 @@ func (m *menuModel) View() string {
 		}
 		row := choiceRow(i, i == m.cursor, item.label)
 		if item.detail != "" {
-			row += strings.Repeat(" ", labelWidth-lipgloss.Width(item.label)+2) + dim.Render(item.detail)
+			row += strings.Repeat(" ", labelWidth-lipgloss.Width(item.label)+2) + dim.Render(m.detail(item))
 		}
 		rows = append(rows, row)
 	}
-	rows = append(rows, "", dim.Render(fmt.Sprintf("1–%d choose · ↑/↓ move · enter select · esc/q cancel", len(m.items))))
+	rows = append(rows, "", dim.Render("f fast mode: "+map[bool]string{false: "off", true: "on"}[m.fast]))
+	rows = append(rows, dim.Render(fmt.Sprintf("1–%d choose · ↑/↓ move · enter select · esc/q cancel", len(m.items))))
 	return menuPage.Render(strings.Join(rows, "\n"))
 }
 

@@ -124,7 +124,10 @@ Claude subscription reviews. See [OpenCode setup and sources](opencode.md).
 
 `ghd review <owner/repo> <pr> [opencode [provider/model#variant]] [--instructions <text>]`
 also works from any shell. The dashboard uses OpenCode with
-`openai/gpt-6.2-sol#high` or `claude-agent/opus#high`. Opus follows Claude Code's
+`openai/gpt-6.2-sol#high` or `claude-agent/opus#high`; `f` in the model picker
+switches GPT to `openai/gpt-6.2-sol-fast#high`, and a fast review model makes
+the middle and weak tiers fast too. Opus has no fast mode, because OpenCode's
+`claude-agent` provider passes Claude Code only a model and an effort. Opus follows Claude Code's
 advertised alias; it is not pinned to a guessed model identifier. Reviews run
 only through OpenCode. Human instructions end the brief,
 reach every specialist verbatim, and appear in the saved metadata and review.

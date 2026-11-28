@@ -123,6 +123,7 @@ fi
 
 case $model in
   claude-agent/*) tiers=(claude-agent/sonnet#high claude-agent/haiku) ;;
+  openai/*-fast*) tiers=(openai/gpt-6.1-terra-fast#high openai/gpt-6-luna-fast) ;;
   *) tiers=(openai/gpt-6.1-terra#high openai/gpt-6-luna) ;;
 esac
 export GHD_MIDDLE_MODEL=${GHD_MIDDLE_MODEL:-$tiers[1]} GHD_VERIFY_MODEL=${GHD_VERIFY_MODEL:-$tiers[2]}

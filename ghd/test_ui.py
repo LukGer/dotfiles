@@ -329,6 +329,7 @@ def test_menu_opens_the_selected_picker_in_a_larger_popup(cli, action, script):
 
 @pytest.mark.parametrize("model, overrides, middle, weak", [
     ("openai/gpt-6.2-sol#high", {}, "openai/gpt-6.1-terra#high", "openai/gpt-6-luna"),
+    ("openai/gpt-6.2-sol-fast#high", {}, "openai/gpt-6.1-terra-fast#high", "openai/gpt-6-luna-fast"),
     ("claude-agent/opus#high", {}, "claude-agent/sonnet#high", "claude-agent/haiku"),
     ("openai/gpt-6.2-sol#high", {"GHD_VERIFY_MODEL": "claude-agent/haiku", "GHD_MIDDLE_MODEL": "claude-agent/sonnet"},
      "claude-agent/sonnet", "claude-agent/haiku"),
